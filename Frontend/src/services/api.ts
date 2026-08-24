@@ -108,8 +108,8 @@ async function tryRefreshToken(): Promise<boolean> {
 
 // ── Auth APIs ──────────────────────────────────────────────────────────────────
 
-export async function login(email: string, password: string): Promise<{ access_token: string; refresh_token: string; user: User }> {
-  const res = await request<{ message: string; access_token: string; refresh_token: string; user: User }>(
+export async function login(email: string, password: string): Promise<{ access_token: string; refresh_token: string; user: User; is_admin?: boolean; admin?: any }> {
+  const res = await request<{ message: string; access_token: string; refresh_token: string; user: User; is_admin?: boolean; admin?: any }>(
     '/auth/login',
     {
       method: 'POST',
@@ -117,6 +117,11 @@ export async function login(email: string, password: string): Promise<{ access_t
     }
   )
   setAuthSession(res.access_token, res.refresh_token, res.user)
+  if (res.is_admin && res.admin) {
+    localStorage.setItem('caretrack_admin_access_token', res.access_token)
+    localStorage.setItem('caretrack_admin_refresh_token', res.refresh_token)
+    localStorage.setItem('caretrack_admin_user', JSON.stringify(res.admin))
+  }
   return res
 }
 

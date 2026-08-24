@@ -38,7 +38,11 @@ export default function AuthPage({ mode, onModeChange, onNavigate, onAuthenticat
       if (mode === 'login') {
         const res = await login(form.email, form.password)
         onAuthenticate(res.user)
-        onNavigate('home')
+        if (res.is_admin) {
+          onNavigate('admin-dashboard')
+        } else {
+          onNavigate('home')
+        }
       } else {
         const res = await register(form.name, form.email, form.password, form.phone)
         onAuthenticate(res.user)

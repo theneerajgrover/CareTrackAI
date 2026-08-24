@@ -62,6 +62,10 @@ except Exception as e:
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
+# Register Admin Portal Blueprint
+from admin_routes import admin_bp
+app.register_blueprint(admin_bp)
+
 JWT_SECRET = os.getenv("JWT_SECRET_KEY", "caretrack-ai-default-secret")
 ACCESS_TOKEN_EXPIRES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES", 900))       # 15 min
 REFRESH_TOKEN_EXPIRES = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES", 604800))  # 7 days
@@ -223,28 +227,53 @@ def login():
     if not email or not password:
         return jsonify({"error": "Email and password are required"}), 400
 
-    # Find user
+    # Find user in patients table
     user = query(
         "SELECT id, name, email, password_hash FROM users WHERE email = %s",
         (email,), fetch_one=True,
     )
-    if not user:
-        return jsonify({"error": "Invalid email or password"}), 401
 
-    # Verify password
-    if not bcrypt.checkpw(password.encode("utf-8"), user["password_hash"].encode("utf-8")):
-        return jsonify({"error": "Invalid email or password"}), 401
+    if user and bcrypt.checkpw(password.encode("utf-8"), user["password_hash"].encode("utf-8")):
+        access_token = create_access_token(user["id"], email)
+        refresh_token = create_refresh_token(user["id"])
+        return jsonify({
+            "message": "Login successful",
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "is_admin": False,
+            "user": {"id": str(user["id"]), "name": user["name"], "email": user["email"]},
+        }), 200
 
-    # Generate tokens
-    access_token = create_access_token(user["id"], email)
-    refresh_token = create_refresh_token(user["id"])
+    # If not found or failed in users table, check admin_users table
+    admin = query(
+        "SELECT id, name, email, password_hash, role, status FROM admin_users WHERE email = %s",
+        (email,), fetch_one=True,
+    )
 
-    return jsonify({
-        "message": "Login successful",
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "user": {"id": str(user["id"]), "name": user["name"], "email": user["email"]},
-    }), 200
+    if admin and bcrypt.checkpw(password.encode("utf-8"), admin["password_hash"].encode("utf-8")):
+        if admin["status"] != "active":
+            return jsonify({"error": "Admin account is inactive. Contact system administrator."}), 403
+
+        from admin_routes import create_admin_access_token, create_admin_refresh_token
+        access_token = create_admin_access_token(admin["id"], email, admin["role"])
+        refresh_token = create_admin_refresh_token(admin["id"])
+
+        # Also create a patient-compatible access token for session state if needed
+        return jsonify({
+            "message": "Admin login successful",
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "is_admin": True,
+            "admin": {
+                "id": str(admin["id"]),
+                "name": admin["name"],
+                "email": admin["email"],
+                "role": admin["role"],
+            },
+            "user": {"id": str(admin["id"]), "name": admin["name"], "email": admin["email"]},
+        }), 200
+
+    return jsonify({"error": "Invalid email or password"}), 401
 
 
 @app.route("/api/auth/refresh", methods=["POST"])

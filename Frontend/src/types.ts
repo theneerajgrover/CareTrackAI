@@ -12,6 +12,19 @@ export type Page =
   | 'review'
   | 'analyzing'
   | 'report'
+  | 'admin-login'
+  | 'admin-dashboard'
+  | 'admin-patients'
+  | 'admin-patient-detail'
+  | 'admin-analyses'
+  | 'admin-reports'
+  | 'admin-symptoms'
+  | 'admin-ai-monitoring'
+  | 'admin-models'
+  | 'admin-feedback'
+  | 'admin-notifications'
+  | 'admin-system'
+  | 'admin-audit'
 
 export interface PatientDetails {
   name: string

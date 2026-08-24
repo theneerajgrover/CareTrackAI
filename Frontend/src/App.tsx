@@ -14,6 +14,8 @@ import SymptomSubcategoryPage from './pages/SymptomSubcategoryPage'
 import ReviewPage from './pages/ReviewPage'
 import AnalyzingPage from './pages/AnalyzingPage'
 import ReportPage from './pages/ReportPage'
+import AdminApp from './admin/AdminApp'
+import type { AdminPage } from './admin/adminTypes'
 import { getAccessToken, getStoredUser, clearAuthSession, logout as apiLogout } from './services/api'
 import type { Page, PatientDetails, SelectedSymptom, PredictionResponse, User } from './types'
 import { pageVariants } from './motion/variants'
@@ -28,7 +30,7 @@ const INITIAL_PATIENT: PatientDetails = {
   weight: '',
 }
 
-// Hide navbar during clinical health assessment flow to prevent breaking momentum
+// Hide navbar during clinical health assessment flow or in admin portal
 const NO_NAVBAR_PAGES: Page[] = [
   'patient-details',
   'symptom-categories',
@@ -36,10 +38,24 @@ const NO_NAVBAR_PAGES: Page[] = [
   'review',
   'analyzing',
   'report',
+  'admin-login',
+  'admin-dashboard',
+  'admin-patients',
+  'admin-patient-detail',
+  'admin-analyses',
+  'admin-reports',
+  'admin-symptoms',
+  'admin-ai-monitoring',
+  'admin-models',
+  'admin-feedback',
+  'admin-notifications',
+  'admin-system',
+  'admin-audit',
 ]
 
 export default function App() {
   const [page, setPage] = useState<Page>('home')
+  const [adminDetailId, setAdminDetailId] = useState<string | undefined>(undefined)
   const [returnToPage, setReturnToPage] = useState<Page>('home')
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
@@ -49,7 +65,7 @@ export default function App() {
   const [currentCategory, setCurrentCategory] = useState<string | null>(null)
   const [currentPrediction, setCurrentPrediction] = useState<PredictionResponse | null>(null)
 
-  // Initialize session on mount
+  // Initialize session on mount + handle /admin URL routing
   useEffect(() => {
     const token = getAccessToken()
     const storedUser = getStoredUser()
@@ -57,6 +73,22 @@ export default function App() {
       setIsAuthenticated(true)
       setUser(storedUser)
     }
+
+    // Check if initial URL or hash points to admin
+    const path = window.location.pathname.toLowerCase()
+    const hash = window.location.hash.toLowerCase()
+    if (path.includes('/admin') || hash.includes('/admin') || hash === '#admin') {
+      setPage('admin-dashboard')
+    }
+
+    const handleHashChange = () => {
+      const h = window.location.hash.toLowerCase()
+      if (h.startsWith('#/admin') || h === '#admin') {
+        setPage('admin-dashboard')
+      }
+    }
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
   }, [])
 
   function navigate(to: Page) {
@@ -242,6 +274,20 @@ export default function App() {
               returnPage={returnToPage}
               onNavigate={navigate}
               onStartNew={handleStartHealthCheck}
+            />
+          )}
+
+          {page.startsWith('admin-') && (
+            <AdminApp
+              page={page as AdminPage}
+              detailId={adminDetailId}
+              onNavigate={(target) => {
+                if (target === 'home') {
+                  navigate('home')
+                } else {
+                  navigate(target as Page)
+                }
+              }}
             />
           )}
         </motion.div>

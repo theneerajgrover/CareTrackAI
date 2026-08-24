@@ -210,6 +210,9 @@ export default function HomePage({ onNavigate, onStartHealthCheck }: HomePagePro
             <button onClick={() => onNavigate('contact')} className="hover:text-foreground transition-colors font-medium">
               Support & Contact →
             </button>
+            <button onClick={() => onNavigate('admin-dashboard')} className="hover:text-accent transition-colors font-semibold text-accent/90">
+              Admin Portal →
+            </button>
           </div>
           <span className="text-[11px] font-mono text-muted-foreground/80">
             CareTrack AI Engine v1.0.0 · Local & Secure
