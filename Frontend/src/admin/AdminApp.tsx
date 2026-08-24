@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   LayoutDashboard, Users, Activity, FileText, Stethoscope, Brain, Cpu,
   MessageSquare, Bell, Shield, ClipboardList, LogOut, Menu, X,
@@ -21,47 +21,17 @@ import AuditLogsPage from './pages/AuditLogsPage'
 import type { SearchResults } from './adminTypes'
 import './styles/admin.css'
 
-const SIDEBAR_SECTIONS = [
-  {
-    label: 'Overview',
-    items: [
-      { id: 'admin-dashboard' as AdminPage, label: 'Dashboard', icon: LayoutDashboard },
-    ],
-  },
-  {
-    label: 'Patients',
-    items: [
-      { id: 'admin-patients' as AdminPage, label: 'Patients', icon: Users },
-      { id: 'admin-analyses' as AdminPage, label: 'Analyses', icon: Activity },
-      { id: 'admin-reports' as AdminPage, label: 'Reports', icon: FileText },
-    ],
-  },
-  {
-    label: 'AI',
-    items: [
-      { id: 'admin-ai-monitoring' as AdminPage, label: 'AI Monitoring', icon: Brain },
-    ],
-  },
-  {
-    label: 'Clinical Data',
-    items: [
-      { id: 'admin-symptoms' as AdminPage, label: 'Symptoms', icon: Stethoscope },
-    ],
-  },
-  {
-    label: 'Communication',
-    items: [
-      { id: 'admin-notifications' as AdminPage, label: 'Notifications', icon: Bell },
-      { id: 'admin-feedback' as AdminPage, label: 'Feedback', icon: MessageSquare },
-    ],
-  },
-  {
-    label: 'System',
-    items: [
-      { id: 'admin-system' as AdminPage, label: 'System Health', icon: Shield },
-      { id: 'admin-audit' as AdminPage, label: 'Audit Logs', icon: ClipboardList },
-    ],
-  },
+const SIDEBAR_ITEMS = [
+  { id: 'admin-dashboard' as AdminPage, label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'admin-patients' as AdminPage, label: 'Patients', icon: Users },
+  { id: 'admin-analyses' as AdminPage, label: 'Analyses', icon: Activity },
+  { id: 'admin-reports' as AdminPage, label: 'Reports', icon: FileText },
+  { id: 'admin-ai-monitoring' as AdminPage, label: 'AI Monitoring', icon: Brain },
+  { id: 'admin-symptoms' as AdminPage, label: 'Symptoms', icon: Stethoscope },
+  { id: 'admin-notifications' as AdminPage, label: 'Notifications', icon: Bell },
+  { id: 'admin-feedback' as AdminPage, label: 'Feedback', icon: MessageSquare },
+  { id: 'admin-system' as AdminPage, label: 'System Health', icon: Shield },
+  { id: 'admin-audit' as AdminPage, label: 'Audit Logs', icon: ClipboardList },
 ]
 
 const PAGE_TITLES: Record<string, string> = {
@@ -94,6 +64,14 @@ export default function AdminApp({ page, onNavigate, detailId }: AdminAppProps) 
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResults | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
+  const sidebarRef = useRef<HTMLElement>(null)
+
+  // Reset sidebar scroll position whenever the active admin page changes
+  useEffect(() => {
+    if (sidebarRef.current) {
+      sidebarRef.current.scrollTop = 0
+    }
+  }, [page])
 
   useEffect(() => {
     const token = getAdminAccessToken()
@@ -138,6 +116,9 @@ export default function AdminApp({ page, onNavigate, detailId }: AdminAppProps) 
   const nav = (p: AdminPage) => {
     onNavigate(p)
     setSidebarOpen(false)
+    if (sidebarRef.current) {
+      sidebarRef.current.scrollTop = 0
+    }
   }
 
   return (
@@ -149,7 +130,11 @@ export default function AdminApp({ page, onNavigate, detailId }: AdminAppProps) 
       />
 
       {/* Sidebar */}
-      <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
+      <aside
+        ref={sidebarRef}
+        className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}
+        aria-label="Admin Navigation"
+      >
         <div className="admin-sidebar-brand">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
             <Heart size={18} style={{ color: '#a5b4fc' }} />
@@ -158,29 +143,25 @@ export default function AdminApp({ page, onNavigate, detailId }: AdminAppProps) 
           <span>Admin Portal</span>
         </div>
 
-        {SIDEBAR_SECTIONS.map((section) => (
-          <div className="admin-sidebar-section" key={section.label}>
-            <div className="admin-sidebar-section-label">{section.label}</div>
-            {section.items.map((item) => (
-              <button
-                key={item.id}
-                className={`admin-sidebar-item ${page === item.id || (page.startsWith(item.id.replace('admin-', 'admin-') + '-detail') && item.id !== 'admin-dashboard') ? 'active' : ''}`}
-                onClick={() => nav(item.id)}
-              >
-                <item.icon />
-                {item.label}
-              </button>
-            ))}
-          </div>
-        ))}
+        <nav aria-label="Admin Navigation Links" style={{ padding: '12px 12px 24px', display: 'flex', flexDirection: 'column' }}>
+          {SIDEBAR_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              className={`admin-sidebar-item ${page === item.id || (page.startsWith(item.id.replace('admin-', 'admin-') + '-detail') && item.id !== 'admin-dashboard') ? 'active' : ''}`}
+              onClick={() => nav(item.id)}
+            >
+              <item.icon />
+              {item.label}
+            </button>
+          ))}
 
-        <div className="admin-sidebar-section" style={{ marginTop: 'auto', paddingBottom: 16 }}>
-          <div className="admin-sidebar-section-label">Account</div>
-          <button className="admin-sidebar-item" onClick={handleLogout}>
-            <LogOut />
-            Logout
-          </button>
-        </div>
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <button className="admin-sidebar-item" onClick={handleLogout}>
+              <LogOut />
+              Logout
+            </button>
+          </div>
+        </nav>
       </aside>
 
       {/* Main Content */}
