@@ -172,6 +172,47 @@ export async function logout(): Promise<void> {
 
 // ── ML Prediction APIs ─────────────────────────────────────────────────────────
 
+export function getGuestId(): string {
+  let gid = localStorage.getItem('caretrack_guest_id')
+  if (!gid) {
+    gid = 'guest_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+    localStorage.setItem('caretrack_guest_id', gid)
+  }
+  return gid
+}
+
+export async function getGuestStatus(): Promise<{ used: boolean; remaining: number; message?: string }> {
+  const gid = getGuestId()
+  return request<{ used: boolean; remaining: number; message?: string }>(`/guest/status?guest_id=${encodeURIComponent(gid)}`, {
+    method: 'GET',
+  })
+}
+
+export async function runGuestPrediction(
+  symptoms: string[],
+  patientDetails?: Partial<PatientDetails>
+): Promise<PredictionResponse> {
+  const gid = getGuestId()
+  const res = await request<PredictionResponse>('/guest/predict', {
+    method: 'POST',
+    body: JSON.stringify({
+      guest_id: gid,
+      symptoms,
+      patient_details: {
+        name: patientDetails?.name || 'Guest User',
+        age: patientDetails?.age || '30',
+        gender: patientDetails?.gender || 'other',
+        dob: patientDetails?.dob || '',
+        bloodGroup: patientDetails?.bloodGroup || 'O+',
+        height: patientDetails?.height || '',
+        weight: patientDetails?.weight || '',
+      },
+    }),
+  })
+  localStorage.setItem('caretrack_guest_completed', 'true')
+  return res
+}
+
 export async function runPrediction(
   symptoms: string[],
   patientDetails: PatientDetails

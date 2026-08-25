@@ -129,7 +129,7 @@ export default function HomePage({ onNavigate, onStartHealthCheck }: HomePagePro
 
                 {/* One-Time Free Trial Button */}
                 <motion.button
-                  onClick={onStartHealthCheck}
+                  onClick={() => onNavigate('guest-check')}
                   className="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-full border-2 border-accent/40 bg-card hover:bg-accent-subtle text-accent font-bold text-[13px] transition-colors shadow-sm"
                   whileHover={{ scale: 1.02, borderColor: 'rgba(67,56,202,0.8)' }}
                   whileTap={buttonTap}

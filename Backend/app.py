@@ -536,6 +536,197 @@ def predict():
     }), 200
 
 
+# -- Guest / One-Time Free Check Endpoints -------------------------------------
+
+@app.route("/api/guest/status", methods=["GET"])
+def guest_status():
+    """Check if the guest user has already consumed their 1 free AI health check."""
+    guest_id = request.args.get("guest_id") or request.headers.get("X-Guest-ID", "").strip()
+    ip_address = request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip()
+
+    if not guest_id and not ip_address:
+        return jsonify({"used": False, "remaining": 1}), 200
+
+    row = None
+    if guest_id:
+        row = query("SELECT id, created_at FROM guest_usage WHERE guest_id = %s LIMIT 1", (guest_id,), fetch_one=True)
+    if not row and ip_address and ip_address != "127.0.0.1":
+        row = query(
+            "SELECT id, created_at FROM guest_usage WHERE ip_address = %s AND created_at >= NOW() - INTERVAL '24 hours' LIMIT 1",
+            (ip_address,), fetch_one=True
+        )
+
+    is_used = bool(row)
+    return jsonify({
+        "used": is_used,
+        "remaining": 0 if is_used else 1,
+        "message": "1-time free guest check completed." if is_used else "1 free check available."
+    }), 200
+
+
+@app.route("/api/guest/predict", methods=["POST"])
+def guest_predict():
+    """
+    Execute real disease prediction for a guest user with strict 1-time limit enforcement.
+    Uses existing ML model, symptom mapping, and clinical enrichment.
+    """
+    data = request.get_json() or {}
+    guest_id = data.get("guest_id") or request.headers.get("X-Guest-ID", "").strip()
+    ip_address = request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip()
+
+    if not guest_id:
+        guest_id = str(uuid.uuid4())
+
+    # Check 1-time guest limit
+    existing = query("SELECT id FROM guest_usage WHERE guest_id = %s LIMIT 1", (guest_id,), fetch_one=True)
+    if existing:
+        return jsonify({
+            "error": "1-Time Free Check limit reached. Please sign in or create a free account to perform unlimited clinical assessments.",
+            "code": "GUEST_LIMIT_REACHED",
+            "used": True,
+        }), 403
+
+    symptoms = data.get("symptoms", [])
+    if not symptoms or not isinstance(symptoms, list):
+        return jsonify({"error": "A non-empty list of symptoms is required."}), 400
+
+    patient = data.get("patient_details", {})
+
+    # Map symptoms using existing DB & cache
+    symptom_ids = []
+    for raw_key in symptoms:
+        clean_key = str(raw_key).strip().lower().replace(" ", "_")
+        row = _SYMPTOM_MAP_CACHE.get(clean_key)
+        if not row and clean_key in FRONTEND_TO_DATASET:
+            for mc in FRONTEND_TO_DATASET[clean_key]:
+                if mc in _SYMPTOM_MAP_CACHE:
+                    row = _SYMPTOM_MAP_CACHE[mc]
+                    break
+        if not row:
+            row = query("SELECT id, key, label FROM symptoms WHERE key = %s", (clean_key,), fetch_one=True)
+            if row:
+                _SYMPTOM_MAP_CACHE[clean_key] = row
+        if row and row["id"] not in symptom_ids:
+            symptom_ids.append(row["id"])
+
+    # Run real ML model prediction
+    try:
+        result = predict_disease(symptoms, top_n=5)
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 503
+    except Exception as e:
+        return jsonify({"error": f"Prediction failed: {str(e)}"}), 500
+
+    if not result.get("predictions"):
+        return jsonify({
+            "error": "No predictions could be made. None of the symptoms matched the model.",
+            "symptoms_unmatched": result.get("symptoms_unmatched", []),
+        }), 422
+
+    # Map disease IDs
+    predictions_with_ids = []
+    for i, pred in enumerate(result["predictions"]):
+        disease_name = pred["disease"]
+        disease_id = _DISEASE_MAP_CACHE.get(disease_name)
+        if not disease_id:
+            disease_row = query("SELECT id FROM diseases WHERE name = %s", (disease_name,), fetch_one=True)
+            disease_id = disease_row["id"] if disease_row else None
+            if disease_id:
+                _DISEASE_MAP_CACHE[disease_name] = disease_id
+
+        predictions_with_ids.append({
+            "disease": disease_name,
+            "disease_id": disease_id,
+            "confidence": pred["confidence"],
+            "rank": i + 1,
+        })
+
+    # Generate remedies, warnings, and specialist referrals
+    enriched_predictions = generate_remedies_and_warnings(predictions_with_ids)
+
+    # Persist guest prediction record (with user_id = NULL)
+    blood_group = patient.get("blood_group") or patient.get("bloodGroup") or ""
+    height = str(patient.get("height") or "")
+    weight = str(patient.get("weight") or "")
+
+    prediction_record = execute_returning(
+        """INSERT INTO predictions
+           (user_id, patient_name, patient_age, patient_gender, patient_dob,
+            patient_blood_group, patient_height, patient_weight,
+            patient_email, patient_phone, symptom_ids)
+           VALUES (NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+           RETURNING id""",
+        (
+            patient.get("name") or "Guest Patient",
+            str(patient.get("age", "30")),
+            patient.get("gender", "other"),
+            patient.get("dob", ""),
+            blood_group,
+            height,
+            weight,
+            patient.get("email", ""),
+            patient.get("phone", ""),
+            symptom_ids,
+        ),
+    )
+    prediction_id = str(prediction_record["id"])
+
+    # Persist prediction findings
+    if enriched_predictions:
+        for pred in enriched_predictions:
+            execute(
+                """INSERT INTO prediction_results
+                   (prediction_id, disease_id, confidence_pct, rank, risk_level, remedies_text, warning_text)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                (
+                    prediction_id,
+                    pred.get("disease_id"),
+                    pred["confidence"],
+                    pred["rank"],
+                    pred.get("risk_level", "low"),
+                    pred.get("remedies_text"),
+                    pred.get("warning_text"),
+                ),
+            )
+
+    # Record guest usage to enforce 1-time limit
+    execute(
+        """INSERT INTO guest_usage (guest_id, ip_address, prediction_id)
+           VALUES (%s, %s, %s)
+           ON CONFLICT (guest_id) DO NOTHING""",
+        (guest_id, ip_address, prediction_id),
+    )
+
+    model_info_data = get_model_info()
+
+    return jsonify({
+        "prediction_id": prediction_id,
+        "predictions": [
+            {
+                "rank": p["rank"],
+                "disease": p["disease"],
+                "disease_id": p.get("disease_id"),
+                "confidence": p["confidence"],
+                "risk_level": p.get("risk_level"),
+                "doctor": p.get("doctor", "General Physician"),
+                "remedies": p.get("remedies_text"),
+                "warning": p.get("warning_text"),
+            }
+            for p in enriched_predictions
+        ],
+        "symptom_ids": symptom_ids,
+        "symptoms_matched": result.get("symptoms_matched", []),
+        "symptoms_unmatched": result.get("symptoms_unmatched", []),
+        "model_info": {
+            "name": model_info_data.get("model_name"),
+            "accuracy": model_info_data.get("accuracy"),
+            "f1_score": model_info_data.get("f1_score"),
+        },
+        "guest_used": True,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }), 200
+
+
 # -- Past Predictions ----------------------------------------------------------
 
 @app.route("/api/predictions", methods=["GET"])

@@ -6,6 +6,7 @@ export type Page =
   | 'contact'
   | 'history'
   | 'auth'
+  | 'guest-check'
   | 'patient-details'
   | 'symptom-categories'
   | 'symptom-subcategory'

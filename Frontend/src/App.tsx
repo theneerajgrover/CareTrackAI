@@ -8,6 +8,7 @@ import AboutPage from './pages/AboutPage'
 import ContactPage from './pages/ContactPage'
 import HistoryPage from './pages/HistoryPage'
 import AuthPage from './pages/AuthPage'
+import GuestCheckPage from './pages/GuestCheckPage'
 import PatientDetailsPage from './pages/PatientDetailsPage'
 import SymptomCategoriesPage from './pages/SymptomCategoriesPage'
 import SymptomSubcategoryPage from './pages/SymptomSubcategoryPage'
@@ -34,6 +35,7 @@ const INITIAL_PATIENT: PatientDetails = {
 // Hide navbar during clinical health assessment flow, auth pages, or in dedicated portals
 const NO_NAVBAR_PAGES: Page[] = [
   'auth',
+  'guest-check',
   'patient-details',
   'symptom-categories',
   'symptom-subcategory',
@@ -128,6 +130,9 @@ function resolveRoute(isAdmin: boolean, isPatient: boolean): Page {
   if (hash.startsWith('#/patient') || path.includes('/patient')) {
     return 'auth'
   }
+  if (hash.includes('guest-check')) {
+    return 'guest-check'
+  }
   if (hash.includes('auth') || hash.includes('login') || hash.includes('signin')) {
     return 'auth'
   }
@@ -184,6 +189,8 @@ export default function App() {
     } else if (to.startsWith('patient-')) {
       const sub = to.replace('patient-', '')
       window.location.hash = `/patient/${sub}`
+    } else if (to === 'guest-check') {
+      window.location.hash = '/guest-check'
     } else if (to === 'history') {
       window.location.hash = '/history'
     } else if (to === 'how-it-works') {
@@ -360,6 +367,16 @@ export default function App() {
                 onModeChange={setAuthMode}
                 onNavigate={navigate}
                 onAuthenticate={handleAuthenticate}
+              />
+            )}
+
+            {page === 'guest-check' && (
+              <GuestCheckPage
+                onNavigate={navigate}
+                onOpenAuth={(mode) => {
+                  setAuthMode(mode)
+                  navigate('auth')
+                }}
               />
             )}
 
