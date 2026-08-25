@@ -229,11 +229,35 @@ def login():
 
     # Find user in patients table
     user = query(
-        "SELECT id, name, email, password_hash FROM users WHERE email = %s",
+        "SELECT id, name, email, password_hash, role FROM users WHERE email = %s",
         (email,), fetch_one=True,
     )
 
     if user and bcrypt.checkpw(password.encode("utf-8"), user["password_hash"].encode("utf-8")):
+        is_admin_user = (user.get("role") == "admin")
+        if is_admin_user:
+            admin_row = query("SELECT id FROM admin_users WHERE email = %s", (email,), fetch_one=True)
+            admin_id = admin_row["id"] if admin_row else user["id"]
+            from admin_routes import create_admin_access_token, create_admin_refresh_token
+            access_token = create_admin_access_token(admin_id, email, "admin")
+            if admin_row:
+                refresh_token = create_admin_refresh_token(admin_id)
+            else:
+                refresh_token = create_refresh_token(user["id"])
+            return jsonify({
+                "message": "Admin login successful",
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "is_admin": True,
+                "admin": {
+                    "id": str(admin_id),
+                    "name": user["name"],
+                    "email": user["email"],
+                    "role": "admin",
+                },
+                "user": {"id": str(user["id"]), "name": user["name"], "email": user["email"]},
+            }), 200
+
         access_token = create_access_token(user["id"], email)
         refresh_token = create_refresh_token(user["id"])
         return jsonify({

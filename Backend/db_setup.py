@@ -416,35 +416,49 @@ def seed_diseases():
 
 
 def seed_admin():
-    """Seed the default admin account."""
+    """Seed the default admin account into both admin_users and users tables."""
     print("\n[5/7] Seeding default admin account...")
     conn = psycopg2.connect(
         host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, dbname=DB_NAME
     )
     cur = conn.cursor()
 
-    # Check if admin already exists
-    cur.execute("SELECT COUNT(*) FROM admin_users WHERE email = %s", ("admin@caretrack.ai",))
-    if cur.fetchone()[0] > 0:
-        print("  Admin account already exists. Skipping.")
-        cur.close()
-        conn.close()
-        return
-
-    # Hash password
     password = "Admin@CareTrack2026"
     password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    email = "admin@caretrack.ai"
 
-    cur.execute(
-        """INSERT INTO admin_users (name, email, password_hash, role, status)
-           VALUES (%s, %s, %s, %s, %s)""",
-        ("CareTrack Admin", "admin@caretrack.ai", password_hash, "admin", "active"),
-    )
+    # Seed/Update in admin_users
+    cur.execute("SELECT COUNT(*) FROM admin_users WHERE email = %s", (email,))
+    if cur.fetchone()[0] == 0:
+        cur.execute(
+            """INSERT INTO admin_users (name, email, password_hash, role, status)
+               VALUES (%s, %s, %s, %s, %s)""",
+            ("CareTrack Admin", email, password_hash, "admin", "active"),
+        )
+    else:
+        cur.execute(
+            """UPDATE admin_users SET password_hash = %s, status = 'active' WHERE email = %s""",
+            (password_hash, email),
+        )
+
+    # Seed/Update in users
+    cur.execute("SELECT COUNT(*) FROM users WHERE email = %s", (email,))
+    if cur.fetchone()[0] == 0:
+        cur.execute(
+            """INSERT INTO users (name, email, password_hash, role, status)
+               VALUES (%s, %s, %s, %s, %s)""",
+            ("CareTrack Admin", email, password_hash, "admin", "active"),
+        )
+    else:
+        cur.execute(
+            """UPDATE users SET password_hash = %s, role = 'admin', status = 'active' WHERE email = %s""",
+            (password_hash, email),
+        )
 
     conn.commit()
     cur.close()
     conn.close()
-    print(f"  [OK] Default admin seeded: admin@caretrack.ai / {password}")
+    print(f"  [OK] Default admin verified: {email} / {password}")
 
 
 def seed_ai_model():
