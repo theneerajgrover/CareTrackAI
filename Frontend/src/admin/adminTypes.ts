@@ -16,11 +16,43 @@ export type AdminPage =
   | 'admin-report-detail'
   | 'admin-symptoms'
   | 'admin-ai-monitoring'
+  | 'admin-chatbot'
   | 'admin-models'
   | 'admin-feedback'
   | 'admin-notifications'
   | 'admin-system'
   | 'admin-audit'
+
+export interface AdminChatbotStats {
+  total_sessions: number
+  total_messages: number
+  ai_responses: number
+  failed_requests: number
+  avg_response_time_ms: number
+  active_sessions_24h: number
+  success_rate_pct: number
+  model_breakdown: { model: string; count: number }[]
+  daily_trend: { date: string; count: number }[]
+  service_status: {
+    engine: string
+    status: string
+    api_configured: boolean
+    checked_at: string
+  }
+}
+
+export interface AdminChatSession {
+  id: string
+  title: string
+  status: string
+  patient_name: string
+  patient_email: string
+  message_count: number
+  last_message?: string
+  avg_latency_ms: number
+  created_at: string
+  updated_at: string
+}
 
 export interface AdminUser {
   id: string

@@ -50,6 +50,7 @@ const NO_NAVBAR_PAGES: Page[] = [
   'patient-notifications',
   'patient-profile',
   'patient-feedback',
+  'patient-chatbot',
   'admin-login',
   'admin-dashboard',
   'admin-patients',
@@ -58,6 +59,7 @@ const NO_NAVBAR_PAGES: Page[] = [
   'admin-reports',
   'admin-symptoms',
   'admin-ai-monitoring',
+  'admin-chatbot',
   'admin-models',
   'admin-feedback',
   'admin-notifications',
@@ -90,6 +92,7 @@ function resolveRoute(isAdmin: boolean, isPatient: boolean): Page {
     if (hash.includes('/admin/patients')) return 'admin-patients'
     if (hash.includes('/admin/analyses')) return 'admin-analyses'
     if (hash.includes('/admin/reports')) return 'admin-reports'
+    if (hash.includes('/admin/chatbot')) return 'admin-chatbot'
     if (hash.includes('/admin/ai') || hash.includes('/admin/models')) return 'admin-ai-monitoring'
     if (hash.includes('/admin/symptoms')) return 'admin-symptoms'
     if (hash.includes('/admin/notifications')) return 'admin-notifications'
@@ -102,6 +105,7 @@ function resolveRoute(isAdmin: boolean, isPatient: boolean): Page {
 
   // 2. Authenticated Patient: Default is Patient Dashboard; allow clinical assessment flow & info pages
   if (isPatient) {
+    if (hash.includes('/patient/chatbot')) return 'patient-chatbot'
     if (hash.includes('/patient/analyses')) return 'patient-analyses'
     if (hash.includes('/patient/reports')) return 'patient-reports'
     if (hash.includes('/patient/symptoms')) return 'patient-symptoms'

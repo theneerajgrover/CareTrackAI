@@ -21,6 +21,7 @@ export type Page =
   | 'patient-notifications'
   | 'patient-profile'
   | 'patient-feedback'
+  | 'patient-chatbot'
   | 'admin-login'
   | 'admin-dashboard'
   | 'admin-patients'
@@ -29,6 +30,7 @@ export type Page =
   | 'admin-reports'
   | 'admin-symptoms'
   | 'admin-ai-monitoring'
+  | 'admin-chatbot'
   | 'admin-models'
   | 'admin-feedback'
   | 'admin-notifications'
@@ -44,6 +46,29 @@ export type PatientPage =
   | 'patient-notifications'
   | 'patient-profile'
   | 'patient-feedback'
+  | 'patient-chatbot'
+
+export interface ChatMessage {
+  id: string
+  sender: 'user' | 'assistant'
+  content: string
+  model?: string
+  response_time_ms?: number
+  status?: string
+  error_message?: string | null
+  created_at: string
+}
+
+export interface ChatSession {
+  id: string
+  title: string
+  status: string
+  message_count: number
+  last_message?: string
+  last_message_at?: string
+  created_at: string
+  updated_at: string
+}
 
 export interface UserStats {
   total_analyses: number

@@ -999,6 +999,217 @@ def user_feedback():
     }), 200
 
 
+# -- Patient Medical Assistance Chatbot Endpoints -----------------------------
+
+@app.route("/api/user/chat/sessions", methods=["GET"])
+@require_auth
+def list_chat_sessions():
+    """List all chat sessions for the authenticated patient."""
+    rows = query(
+        """SELECT s.id, s.title, s.status, s.created_at, s.updated_at,
+                  (SELECT COUNT(*) FROM chat_messages m WHERE m.session_id = s.id) as message_count,
+                  (SELECT content FROM chat_messages m WHERE m.session_id = s.id ORDER BY m.created_at DESC LIMIT 1) as last_message,
+                  (SELECT created_at FROM chat_messages m WHERE m.session_id = s.id ORDER BY m.created_at DESC LIMIT 1) as last_message_at
+           FROM chat_sessions s
+           WHERE s.user_id = %s
+           ORDER BY s.updated_at DESC LIMIT 50""",
+        (g.user_id,), fetch_all=True
+    )
+    return jsonify({
+        "sessions": [
+            {
+                "id": str(r["id"]),
+                "title": r["title"],
+                "status": r["status"],
+                "message_count": int(r["message_count"] or 0),
+                "last_message": r["last_message"],
+                "last_message_at": r["last_message_at"].isoformat() if r.get("last_message_at") else None,
+                "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+                "updated_at": r["updated_at"].isoformat() if r.get("updated_at") else None,
+            }
+            for r in (rows or [])
+        ]
+    }), 200
+
+
+@app.route("/api/user/chat/sessions/<session_id>", methods=["GET"])
+@require_auth
+def get_chat_session_messages(session_id):
+    """Get all messages for a specific patient chat session."""
+    session = query(
+        "SELECT id, title, status, created_at FROM chat_sessions WHERE id = %s AND user_id = %s",
+        (session_id, g.user_id), fetch_one=True
+    )
+    if not session:
+        return jsonify({"error": "Chat session not found"}), 404
+
+    messages = query(
+        """SELECT id, sender, content, model, response_time_ms, status, created_at
+           FROM chat_messages
+           WHERE session_id = %s AND user_id = %s
+           ORDER BY created_at ASC""",
+        (session_id, g.user_id), fetch_all=True
+    )
+
+    return jsonify({
+        "session": {
+            "id": str(session["id"]),
+            "title": session["title"],
+            "status": session["status"],
+            "created_at": session["created_at"].isoformat() if session.get("created_at") else None,
+        },
+        "messages": [
+            {
+                "id": str(m["id"]),
+                "sender": m["sender"],
+                "content": m["content"],
+                "model": m.get("model"),
+                "response_time_ms": m.get("response_time_ms", 0),
+                "status": m.get("status", "success"),
+                "created_at": m["created_at"].isoformat() if m.get("created_at") else None,
+            }
+            for m in (messages or [])
+        ]
+    }), 200
+
+
+@app.route("/api/user/chat/send", methods=["POST"])
+@require_auth
+def send_chat_message():
+    """
+    Send a message to the AI Medical Assistant.
+    Persists user message & AI response in PostgreSQL database with response latency.
+    """
+    data = request.get_json() or {}
+    message_text = data.get("message", "").strip()
+    session_id = data.get("session_id")
+
+    if not message_text:
+        return jsonify({"error": "Message content is required"}), 400
+
+    # 1. Resolve or create chat session
+    if session_id:
+        sess = query(
+            "SELECT id, title FROM chat_sessions WHERE id = %s AND user_id = %s",
+            (session_id, g.user_id), fetch_one=True
+        )
+        if not sess:
+            session_id = None
+
+    if not session_id:
+        title_snippet = message_text[:40] + ("..." if len(message_text) > 40 else "")
+        sess_rec = execute_returning(
+            "INSERT INTO chat_sessions (user_id, title) VALUES (%s, %s) RETURNING id",
+            (g.user_id, title_snippet or "Medical Consultation")
+        )
+        session_id = str(sess_rec["id"])
+
+    # 2. Persist user message
+    user_msg_rec = execute_returning(
+        """INSERT INTO chat_messages (session_id, user_id, sender, content, status)
+           VALUES (%s, %s, 'user', %s, 'success')
+           RETURNING id, created_at""",
+        (session_id, g.user_id, message_text)
+    )
+
+    # 3. Retrieve authenticated patient's clinical context (safely isolated to g.user_id)
+    u_row = query("SELECT name, phone FROM users WHERE id = %s", (g.user_id,), fetch_one=True)
+    latest_pred = query(
+        """SELECT p.id, p.patient_name, p.patient_age, p.patient_gender, p.patient_blood_group, p.symptom_ids
+           FROM predictions p
+           WHERE p.user_id = %s
+           ORDER BY p.created_at DESC LIMIT 1""",
+        (g.user_id,), fetch_one=True
+    )
+
+    patient_ctx = {
+        "name": u_row.get("name") if u_row else "Patient",
+    }
+
+    if latest_pred:
+        patient_ctx["age"] = latest_pred.get("patient_age")
+        patient_ctx["gender"] = latest_pred.get("patient_gender")
+
+        # Get top result for latest prediction
+        top_res = query(
+            """SELECT pr.confidence_pct, pr.risk_level, d.name as disease
+               FROM prediction_results pr LEFT JOIN diseases d ON pr.disease_id = d.id
+               WHERE pr.prediction_id = %s ORDER BY pr.rank LIMIT 1""",
+            (str(latest_pred["id"]),), fetch_one=True
+        )
+        if top_res:
+            patient_ctx["latest_condition"] = top_res.get("disease")
+            patient_ctx["latest_confidence"] = float(top_res["confidence_pct"]) if top_res.get("confidence_pct") else 0
+            patient_ctx["risk_level"] = top_res.get("risk_level")
+
+        # Get readable symptom labels
+        if latest_pred.get("symptom_ids"):
+            s_rows = query("SELECT label FROM symptoms WHERE id = ANY(%s)", (latest_pred["symptom_ids"],), fetch_all=True)
+            if s_rows:
+                patient_ctx["symptoms"] = [s["label"] for s in s_rows]
+
+    # 4. Fetch recent conversation history for continuity
+    past_messages = query(
+        """SELECT sender as role, content FROM chat_messages
+           WHERE session_id = %s AND user_id = %s
+           ORDER BY created_at ASC LIMIT 10""",
+        (session_id, g.user_id), fetch_all=True
+    )
+
+    # 5. Call OpenAI service
+    try:
+        from openai_service import generate_chat_response
+        ai_result = generate_chat_response(past_messages or [{"role": "user", "content": message_text}], patient_ctx)
+    except Exception as e:
+        ai_result = {
+            "content": "I am here to assist with your medical questions. If you are experiencing concerning symptoms, please consult a healthcare professional.",
+            "model": "caretrack-fallback",
+            "response_time_ms": 60,
+            "status": "fallback",
+            "error": str(e)
+        }
+
+    # 6. Persist AI response
+    ai_msg_rec = execute_returning(
+        """INSERT INTO chat_messages (session_id, user_id, sender, content, model, response_time_ms, status, error_message)
+           VALUES (%s, %s, 'assistant', %s, %s, %s, %s, %s)
+           RETURNING id, created_at""",
+        (
+            session_id,
+            g.user_id,
+            ai_result["content"],
+            ai_result.get("model", "gpt-4o-mini"),
+            ai_result.get("response_time_ms", 0),
+            ai_result.get("status", "success"),
+            ai_result.get("error"),
+        )
+    )
+
+    # 7. Update session timestamp
+    execute("UPDATE chat_sessions SET updated_at = NOW() WHERE id = %s", (session_id,))
+
+    return jsonify({
+        "session_id": session_id,
+        "message": {
+            "id": str(ai_msg_rec["id"]),
+            "sender": "assistant",
+            "content": ai_result["content"],
+            "model": ai_result.get("model", "gpt-4o-mini"),
+            "response_time_ms": ai_result.get("response_time_ms", 0),
+            "status": ai_result.get("status", "success"),
+            "created_at": ai_msg_rec["created_at"].isoformat() if ai_msg_rec.get("created_at") else None,
+        }
+    }), 200
+
+
+@app.route("/api/user/chat/sessions/<session_id>", methods=["DELETE"])
+@require_auth
+def delete_chat_session(session_id):
+    """Delete a chat session."""
+    execute("DELETE FROM chat_sessions WHERE id = %s AND user_id = %s", (session_id, g.user_id))
+    return jsonify({"message": "Chat session deleted successfully"}), 200
+
+
 # -- Symptoms & Diseases Endpoints ---------------------------------------------
 
 @app.route("/api/symptoms", methods=["GET"])

@@ -318,6 +318,36 @@ def create_tables():
         """CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);""",
         """CREATE INDEX IF NOT EXISTS idx_notifications_target ON notifications(target_type);""",
         """CREATE INDEX IF NOT EXISTS idx_notification_reads_notification_id ON notification_reads(notification_id);""",
+
+        # ── Chatbot Tables ───────────────────────────────────────────────
+        """
+        CREATE TABLE IF NOT EXISTS chat_sessions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            title VARCHAR(255) NOT NULL DEFAULT 'Medical Inquiry',
+            status VARCHAR(32) NOT NULL DEFAULT 'active',
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        );
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            session_id UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            sender VARCHAR(16) NOT NULL,
+            content TEXT NOT NULL,
+            model VARCHAR(64) DEFAULT 'gpt-4o-mini',
+            response_time_ms INTEGER DEFAULT 0,
+            status VARCHAR(32) DEFAULT 'success',
+            error_message TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+        """,
+        """CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, created_at ASC);""",
+        """CREATE INDEX IF NOT EXISTS idx_chat_messages_user ON chat_messages(user_id, created_at DESC);""",
+        """CREATE INDEX IF NOT EXISTS idx_chat_messages_created ON chat_messages(created_at DESC);""",
+        """CREATE INDEX IF NOT EXISTS idx_chat_sessions_user ON chat_sessions(user_id, updated_at DESC);""",
         """CREATE INDEX IF NOT EXISTS idx_audit_logs_admin_id ON audit_logs(admin_id);""",
         """CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);""",
         """CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);""",

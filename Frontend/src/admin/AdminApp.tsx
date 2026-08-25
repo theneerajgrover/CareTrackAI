@@ -18,8 +18,10 @@ import FeedbackPage from './pages/FeedbackPage'
 import NotificationsPage from './pages/NotificationsPage'
 import SystemHealthPage from './pages/SystemHealthPage'
 import AuditLogsPage from './pages/AuditLogsPage'
+import ChatbotMonitoringPage from './pages/ChatbotMonitoringPage'
 import type { SearchResults } from './adminTypes'
 import CareTrackLogo from '../components/CareTrackLogo'
+import { Bot } from 'lucide-react'
 import './styles/admin.css'
 
 const SIDEBAR_ITEMS = [
@@ -28,6 +30,7 @@ const SIDEBAR_ITEMS = [
   { id: 'admin-analyses' as AdminPage, label: 'Analyses', icon: Activity },
   { id: 'admin-reports' as AdminPage, label: 'Reports', icon: FileText },
   { id: 'admin-ai-monitoring' as AdminPage, label: 'AI Monitoring', icon: Brain },
+  { id: 'admin-chatbot' as AdminPage, label: 'Chatbot Monitoring', icon: Bot },
   { id: 'admin-symptoms' as AdminPage, label: 'Symptoms', icon: Stethoscope },
   { id: 'admin-notifications' as AdminPage, label: 'Notifications', icon: Bell },
   { id: 'admin-feedback' as AdminPage, label: 'Feedback', icon: MessageSquare },
@@ -45,6 +48,7 @@ const PAGE_TITLES: Record<string, string> = {
   'admin-report-detail': 'Report Detail',
   'admin-symptoms': 'Symptom Database',
   'admin-ai-monitoring': 'AI Monitoring',
+  'admin-chatbot': 'AI Chatbot Monitoring',
   'admin-models': 'Model Versions',
   'admin-feedback': 'Feedback Management',
   'admin-notifications': 'Notifications',
@@ -263,6 +267,7 @@ export default function AdminApp({ page, onNavigate, detailId }: AdminAppProps) 
           {page === 'admin-reports' && <ReportsPage onNavigate={nav} />}
           {page === 'admin-symptoms' && <SymptomsPage />}
           {page === 'admin-ai-monitoring' && <AIMonitoringPage />}
+          {page === 'admin-chatbot' && <ChatbotMonitoringPage />}
           {page === 'admin-feedback' && <FeedbackPage />}
           {page === 'admin-notifications' && <NotificationsPage />}
           {page === 'admin-system' && <SystemHealthPage />}

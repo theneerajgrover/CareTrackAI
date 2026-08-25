@@ -342,3 +342,32 @@ export async function exportData(resource: string): Promise<Blob> {
   if (!res.ok) throw new Error('Export failed')
   return res.blob()
 }
+
+// ── Chatbot Monitoring APIs ──────────────────────────────────────────────────
+
+export async function getAdminChatbotStats(): Promise<{ stats: import('../adminTypes').AdminChatbotStats }> {
+  return adminRequest<{ stats: import('../adminTypes').AdminChatbotStats }>('/chatbot/stats')
+}
+
+export async function getAdminChatbotSessions(params: { page?: number; per_page?: number } = {}): Promise<{
+  sessions: import('../adminTypes').AdminChatSession[]
+  total: number
+  page: number
+  per_page: number
+}> {
+  const qs = new URLSearchParams()
+  if (params.page) qs.set('page', String(params.page))
+  if (params.per_page) qs.set('per_page', String(params.per_page))
+  return adminRequest(`/chatbot/sessions?${qs.toString()}`)
+}
+
+export async function getAdminChatSessionMessages(
+  sessionId: string
+): Promise<{ session: import('../adminTypes').AdminChatSession; messages: import('../../types').ChatMessage[] }> {
+  return adminRequest(`/chatbot/sessions/${encodeURIComponent(sessionId)}/messages`)
+}
+
+export async function getAdminChatbotActivity(limit: number = 20): Promise<{ activity: any[] }> {
+  return adminRequest(`/chatbot/activity?limit=${limit}`)
+}
+

@@ -1592,3 +1592,208 @@ def export_data(resource):
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename=caretrack_{resource}_{datetime.now().strftime('%Y%m%d')}.csv"},
     )
+
+
+# ── Chatbot Monitoring Endpoints ─────────────────────────────────────────────
+
+@admin_bp.route("/chatbot/stats", methods=["GET"])
+@require_admin
+def get_chatbot_stats():
+    """Retrieve real aggregated metrics for AI Chatbot Monitoring."""
+    # 1. Total sessions
+    sess_row = query("SELECT COUNT(*) as cnt FROM chat_sessions", fetch_one=True)
+    total_sessions = int(sess_row["cnt"] or 0) if sess_row else 0
+
+    # 2. Total messages (user)
+    user_msg_row = query("SELECT COUNT(*) as cnt FROM chat_messages WHERE sender = 'user'", fetch_one=True)
+    total_messages = int(user_msg_row["cnt"] or 0) if user_msg_row else 0
+
+    # 3. AI responses
+    ai_msg_row = query("SELECT COUNT(*) as cnt FROM chat_messages WHERE sender = 'assistant'", fetch_one=True)
+    ai_responses = int(ai_msg_row["cnt"] or 0) if ai_msg_row else 0
+
+    # 4. Failed/fallback requests
+    failed_row = query("SELECT COUNT(*) as cnt FROM chat_messages WHERE status IN ('failed', 'fallback')", fetch_one=True)
+    failed_requests = int(failed_row["cnt"] or 0) if failed_row else 0
+
+    # 5. Average response latency
+    latency_row = query(
+        "SELECT COALESCE(ROUND(AVG(response_time_ms)), 0) as avg_ms FROM chat_messages WHERE sender = 'assistant' AND response_time_ms > 0",
+        fetch_one=True
+    )
+    avg_response_time_ms = int(latency_row["avg_ms"] or 0) if latency_row else 0
+
+    # 6. Active sessions in last 24h
+    active_row = query(
+        "SELECT COUNT(DISTINCT session_id) as cnt FROM chat_messages WHERE created_at >= NOW() - INTERVAL '24 hours'",
+        fetch_one=True
+    )
+    active_24h = int(active_row["cnt"] or 0) if active_row else 0
+
+    # 7. Model breakdown
+    models = query(
+        "SELECT COALESCE(model, 'gpt-4o-mini') as model_name, COUNT(*) as count FROM chat_messages WHERE sender = 'assistant' GROUP BY model",
+        fetch_all=True
+    )
+
+    # 8. Daily message trend (last 7 days)
+    trend_rows = query(
+        """SELECT DATE(created_at) as msg_date, COUNT(*) as msg_count
+           FROM chat_messages
+           WHERE created_at >= NOW() - INTERVAL '7 days'
+           GROUP BY DATE(created_at)
+           ORDER BY msg_date ASC""",
+        fetch_all=True
+    )
+
+    # 9. Service status
+    has_api_key = bool(os.getenv("OPENAI_API_KEY", "").strip() and not os.getenv("OPENAI_API_KEY", "").startswith("sk-placeholder"))
+    service_status = {
+        "engine": "OpenAI " + os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+        "status": "operational" if has_api_key else "fallback_active",
+        "api_configured": has_api_key,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    return jsonify({
+        "stats": {
+            "total_sessions": total_sessions,
+            "total_messages": total_messages,
+            "ai_responses": ai_responses,
+            "failed_requests": failed_requests,
+            "avg_response_time_ms": avg_response_time_ms,
+            "active_sessions_24h": active_24h,
+            "success_rate_pct": round((ai_responses - failed_requests) / max(ai_responses, 1) * 100, 1),
+            "model_breakdown": [{"model": r["model_name"], "count": int(r["count"])} for r in (models or [])],
+            "daily_trend": [{"date": str(r["msg_date"]), "count": int(r["msg_count"])} for r in (trend_rows or [])],
+            "service_status": service_status,
+        }
+    }), 200
+
+
+@admin_bp.route("/chatbot/sessions", methods=["GET"])
+@require_admin
+def get_chatbot_sessions():
+    """List recent chatbot sessions with patient association and stats."""
+    page = int(request.args.get("page", 1))
+    per_page = int(request.args.get("per_page", 20))
+    offset = (page - 1) * per_page
+
+    total_row = query("SELECT COUNT(*) as cnt FROM chat_sessions", fetch_one=True)
+    total = int(total_row["cnt"] or 0) if total_row else 0
+
+    rows = query(
+        """SELECT s.id, s.title, s.status, s.created_at, s.updated_at,
+                  u.name as patient_name, u.email as patient_email,
+                  (SELECT COUNT(*) FROM chat_messages m WHERE m.session_id = s.id) as message_count,
+                  (SELECT content FROM chat_messages m WHERE m.session_id = s.id ORDER BY m.created_at DESC LIMIT 1) as last_message,
+                  (SELECT COALESCE(ROUND(AVG(response_time_ms)), 0) FROM chat_messages m WHERE m.session_id = s.id AND m.sender = 'assistant') as avg_latency
+           FROM chat_sessions s
+           LEFT JOIN users u ON s.user_id = u.id
+           ORDER BY s.updated_at DESC
+           LIMIT %s OFFSET %s""",
+        (per_page, offset), fetch_all=True
+    )
+
+    return jsonify({
+        "sessions": [
+            {
+                "id": str(r["id"]),
+                "title": r["title"],
+                "status": r["status"],
+                "patient_name": r["patient_name"] or "Unknown Patient",
+                "patient_email": r["patient_email"] or "",
+                "message_count": int(r["message_count"] or 0),
+                "last_message": r["last_message"],
+                "avg_latency_ms": int(r["avg_latency"] or 0),
+                "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+                "updated_at": r["updated_at"].isoformat() if r.get("updated_at") else None,
+            }
+            for r in (rows or [])
+        ],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+    }), 200
+
+
+@admin_bp.route("/chatbot/sessions/<session_id>/messages", methods=["GET"])
+@require_admin
+def get_admin_session_messages(session_id):
+    """Retrieve message transcript for an authorized admin session audit."""
+    session = query(
+        """SELECT s.id, s.title, s.status, s.created_at, s.updated_at,
+                  u.name as patient_name, u.email as patient_email
+           FROM chat_sessions s
+           LEFT JOIN users u ON s.user_id = u.id
+           WHERE s.id = %s""",
+        (session_id,), fetch_one=True
+    )
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+
+    messages = query(
+        """SELECT id, sender, content, model, response_time_ms, status, error_message, created_at
+           FROM chat_messages
+           WHERE session_id = %s
+           ORDER BY created_at ASC""",
+        (session_id,), fetch_all=True
+    )
+
+    return jsonify({
+        "session": {
+            "id": str(session["id"]),
+            "title": session["title"],
+            "status": session["status"],
+            "patient_name": session["patient_name"],
+            "patient_email": session["patient_email"],
+            "created_at": session["created_at"].isoformat() if session.get("created_at") else None,
+        },
+        "messages": [
+            {
+                "id": str(m["id"]),
+                "sender": m["sender"],
+                "content": m["content"],
+                "model": m.get("model"),
+                "response_time_ms": m.get("response_time_ms", 0),
+                "status": m.get("status", "success"),
+                "error_message": m.get("error_message"),
+                "created_at": m["created_at"].isoformat() if m.get("created_at") else None,
+            }
+            for m in (messages or [])
+        ]
+    }), 200
+
+
+@admin_bp.route("/chatbot/activity", methods=["GET"])
+@require_admin
+def get_chatbot_activity():
+    """Live recent chatbot events stream."""
+    limit = int(request.args.get("limit", 20))
+    rows = query(
+        """SELECT m.id, m.session_id, m.sender, m.content, m.model, m.response_time_ms, m.status, m.created_at,
+                  u.name as patient_name, u.email as patient_email
+           FROM chat_messages m
+           LEFT JOIN users u ON m.user_id = u.id
+           ORDER BY m.created_at DESC
+           LIMIT %s""",
+        (limit,), fetch_all=True
+    )
+
+    return jsonify({
+        "activity": [
+            {
+                "id": str(r["id"]),
+                "session_id": str(r["session_id"]),
+                "sender": r["sender"],
+                "content": r["content"][:100] + ("..." if len(r["content"]) > 100 else ""),
+                "model": r["model"],
+                "response_time_ms": r.get("response_time_ms", 0),
+                "status": r["status"],
+                "patient_name": r["patient_name"] or "Patient",
+                "patient_email": r["patient_email"] or "",
+                "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+            }
+            for r in (rows or [])
+        ]
+    }), 200

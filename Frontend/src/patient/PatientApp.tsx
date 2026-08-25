@@ -13,8 +13,10 @@ import PatientRecommendationsPage from './pages/PatientRecommendationsPage'
 import PatientNotificationsPage from './pages/PatientNotificationsPage'
 import PatientProfilePage from './pages/PatientProfilePage'
 import PatientFeedbackPage from './pages/PatientFeedbackPage'
+import PatientChatbotPage from './pages/PatientChatbotPage'
 import { getPredictionDetails } from '../services/api'
 import CareTrackLogo from '../components/CareTrackLogo'
+import { Bot } from 'lucide-react'
 import './styles/patient.css'
 
 interface PatientAppProps {
@@ -33,6 +35,7 @@ interface PatientAppProps {
 
 const SIDEBAR_ITEMS = [
   { id: 'patient-dashboard' as PatientPage, label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'patient-chatbot' as PatientPage, label: 'Medical Assistant', icon: Bot },
   { id: 'patient-analyses' as PatientPage, label: 'My Analyses', icon: Activity },
   { id: 'patient-reports' as PatientPage, label: 'Reports', icon: FileText },
   { id: 'patient-symptoms' as PatientPage, label: 'Symptoms', icon: Stethoscope },
@@ -44,6 +47,7 @@ const SIDEBAR_ITEMS = [
 
 const PAGE_TITLES: Record<string, string> = {
   'patient-dashboard': 'Personal Health Dashboard',
+  'patient-chatbot': 'Medical Assistance Chatbot',
   'patient-analyses': 'My Health Analyses',
   'patient-reports': 'Clinical Health Reports',
   'patient-symptoms': 'Symptom Library',
@@ -282,6 +286,9 @@ export default function PatientApp({
               onStartHealthCheck={onStartHealthCheck}
               onOpenReportById={handleOpenReportById}
             />
+          )}
+          {page === 'patient-chatbot' && (
+            <PatientChatbotPage user={user} />
           )}
           {page === 'patient-analyses' && (
             <PatientAnalysesPage

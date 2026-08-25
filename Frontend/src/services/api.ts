@@ -306,3 +306,35 @@ export async function submitUserFeedback(
 export async function getUserFeedback(): Promise<{ feedback: import('../types').PatientFeedback[] }> {
   return request<{ feedback: import('../types').PatientFeedback[] }>('/user/feedback', { method: 'GET' })
 }
+
+// ── Patient Medical Assistance Chatbot APIs ───────────────────────────────────
+
+export async function getChatSessions(): Promise<{ sessions: import('../types').ChatSession[] }> {
+  return request<{ sessions: import('../types').ChatSession[] }>('/user/chat/sessions', { method: 'GET' })
+}
+
+export async function getChatSessionMessages(
+  sessionId: string
+): Promise<{ session: import('../types').ChatSession; messages: import('../types').ChatMessage[] }> {
+  return request<{ session: import('../types').ChatSession; messages: import('../types').ChatMessage[] }>(
+    `/user/chat/sessions/${encodeURIComponent(sessionId)}`,
+    { method: 'GET' }
+  )
+}
+
+export async function sendChatMessage(
+  message: string,
+  sessionId?: string
+): Promise<{ session_id: string; message: import('../types').ChatMessage }> {
+  return request<{ session_id: string; message: import('../types').ChatMessage }>('/user/chat/send', {
+    method: 'POST',
+    body: JSON.stringify({ message, session_id: sessionId }),
+  })
+}
+
+export async function deleteChatSession(sessionId: string): Promise<{ message: string }> {
+  return request<{ message: string }>(`/user/chat/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE',
+  })
+}
+

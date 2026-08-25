@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import {
   Activity, FileText, Stethoscope, AlertTriangle, ArrowRight,
   Sparkles, CheckCircle2, ShieldCheck, HeartPulse, User as UserIcon, Clock,
-  Calendar, RefreshCw, Bell, MessageSquare, ExternalLink
+  Calendar, RefreshCw, Bell, MessageSquare, ExternalLink, Bot
 } from 'lucide-react'
 import { getUserStats, getPredictionHistory } from '../../services/api'
 import type { PatientPage, UserStats, HistoryItem, User, PredictionResponse, PatientDetails, SelectedSymptom } from '../../types'
@@ -146,6 +146,7 @@ export default function PatientDashboard({
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
           {[
+            { id: 'patient-chatbot' as PatientPage, label: 'Medical Assistant', icon: Bot, desc: 'AI Health Chatbot' },
             { id: 'patient-analyses' as PatientPage, label: 'My Analyses', icon: Activity, desc: 'View past evaluations' },
             { id: 'patient-reports' as PatientPage, label: 'Medical Reports', icon: FileText, desc: 'Clinical documentation' },
             { id: 'patient-symptoms' as PatientPage, label: 'Symptom Library', icon: Stethoscope, desc: '377 health signals' },
@@ -176,6 +177,60 @@ export default function PatientDashboard({
               </div>
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* AI Medical Assistant Interactive Banner */}
+      <div
+        onClick={() => onNavigate('patient-chatbot')}
+        className="patient-card"
+        style={{
+          cursor: 'pointer',
+          background: 'linear-gradient(135deg, rgba(67, 56, 202, 0.04), rgba(99, 102, 241, 0.08))',
+          border: '1px solid rgba(67, 56, 202, 0.2)',
+          marginBottom: 24,
+          padding: '18px 20px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: '#4338ca', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px rgba(67, 56, 202, 0.25)' }}>
+              <Bot size={22} />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                <span style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>AI Medical Assistance Chatbot</span>
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, background: 'rgba(67,56,202,0.1)', color: '#4338ca', textTransform: 'uppercase' }}>OpenAI Powered</span>
+              </div>
+              <p style={{ fontSize: 12, color: '#64748b', margin: 0, lineHeight: 1.4 }}>
+                Ask questions about your health analysis, understand symptom causes, get wellness tips, or ask which specialist to consult.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onNavigate('patient-chatbot')
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              height: 38,
+              padding: '0 16px',
+              borderRadius: 10,
+              background: '#4338ca',
+              color: '#fff',
+              fontSize: 12,
+              fontWeight: 700,
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 2px 6px rgba(67, 56, 202, 0.25)',
+              flexShrink: 0,
+            }}
+          >
+            Ask Assistant <ArrowRight size={13} />
+          </button>
         </div>
       </div>
 
