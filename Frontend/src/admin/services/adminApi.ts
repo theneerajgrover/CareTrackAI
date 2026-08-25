@@ -32,6 +32,9 @@ export function getStoredAdmin(): AdminUser | null {
 }
 
 export function setAdminSession(accessToken: string, refreshToken: string, admin: AdminUser) {
+  localStorage.removeItem('caretrack_access_token')
+  localStorage.removeItem('caretrack_refresh_token')
+  localStorage.removeItem('caretrack_user')
   localStorage.setItem('caretrack_admin_access_token', accessToken)
   localStorage.setItem('caretrack_admin_refresh_token', refreshToken)
   localStorage.setItem('caretrack_admin_user', JSON.stringify(admin))
@@ -41,6 +44,9 @@ export function clearAdminSession() {
   localStorage.removeItem('caretrack_admin_access_token')
   localStorage.removeItem('caretrack_admin_refresh_token')
   localStorage.removeItem('caretrack_admin_user')
+  localStorage.removeItem('caretrack_access_token')
+  localStorage.removeItem('caretrack_refresh_token')
+  localStorage.removeItem('caretrack_user')
 }
 
 // ── Request Helper ──────────────────────────────────────────────────────────

@@ -58,7 +58,7 @@ interface AdminAppProps {
 }
 
 export default function AdminApp({ page, onNavigate, detailId }: AdminAppProps) {
-  const [adminUser, setAdminUser] = useState<AdminUser | null>(null)
+  const [adminUser, setAdminUser] = useState<AdminUser | null>(() => getStoredAdmin())
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')

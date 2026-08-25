@@ -116,11 +116,18 @@ export async function login(email: string, password: string): Promise<{ access_t
       body: JSON.stringify({ email, password }),
     }
   )
-  setAuthSession(res.access_token, res.refresh_token, res.user)
   if (res.is_admin && res.admin) {
+    // Admin user: Store admin session and clear patient session to prevent token mixing
+    clearAuthSession()
     localStorage.setItem('caretrack_admin_access_token', res.access_token)
     localStorage.setItem('caretrack_admin_refresh_token', res.refresh_token)
     localStorage.setItem('caretrack_admin_user', JSON.stringify(res.admin))
+  } else {
+    // Patient user: Store patient session and clear admin session
+    localStorage.removeItem('caretrack_admin_access_token')
+    localStorage.removeItem('caretrack_admin_refresh_token')
+    localStorage.removeItem('caretrack_admin_user')
+    setAuthSession(res.access_token, res.refresh_token, res.user)
   }
   return res
 }
@@ -138,6 +145,9 @@ export async function register(
       body: JSON.stringify({ name, email, password, phone }),
     }
   )
+  localStorage.removeItem('caretrack_admin_access_token')
+  localStorage.removeItem('caretrack_admin_refresh_token')
+  localStorage.removeItem('caretrack_admin_user')
   setAuthSession(res.access_token, res.refresh_token, res.user)
   return res
 }
@@ -155,6 +165,9 @@ export async function logout(): Promise<void> {
     }
   }
   clearAuthSession()
+  localStorage.removeItem('caretrack_admin_access_token')
+  localStorage.removeItem('caretrack_admin_refresh_token')
+  localStorage.removeItem('caretrack_admin_user')
 }
 
 // ── ML Prediction APIs ─────────────────────────────────────────────────────────

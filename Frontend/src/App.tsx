@@ -62,101 +62,117 @@ const NO_NAVBAR_PAGES: Page[] = [
   'admin-audit',
 ]
 
+function getAuthState() {
+  const adminToken = localStorage.getItem('caretrack_admin_access_token')
+  const adminUserStr = localStorage.getItem('caretrack_admin_user')
+  const isAdmin = Boolean(adminToken && adminUserStr)
+
+  const patientToken = getAccessToken()
+  const patientUser = getStoredUser()
+  const isPatient = Boolean(patientToken && patientUser)
+
+  return {
+    isAdmin,
+    isPatient,
+    patientUser,
+  }
+}
+
+function resolveRoute(isAdmin: boolean, isPatient: boolean): Page {
+  const hash = window.location.hash.toLowerCase()
+  const path = window.location.pathname.toLowerCase()
+
+  // 1. Authenticated Admin: ALWAYS stays within the Admin Portal
+  if (isAdmin) {
+    if (hash.includes('/admin/patients')) return 'admin-patients'
+    if (hash.includes('/admin/analyses')) return 'admin-analyses'
+    if (hash.includes('/admin/reports')) return 'admin-reports'
+    if (hash.includes('/admin/ai') || hash.includes('/admin/models')) return 'admin-ai-monitoring'
+    if (hash.includes('/admin/symptoms')) return 'admin-symptoms'
+    if (hash.includes('/admin/notifications')) return 'admin-notifications'
+    if (hash.includes('/admin/feedback')) return 'admin-feedback'
+    if (hash.includes('/admin/system')) return 'admin-system'
+    if (hash.includes('/admin/audit')) return 'admin-audit'
+    // Default admin view is ALWAYS admin-dashboard
+    return 'admin-dashboard'
+  }
+
+  // 2. Authenticated Patient: Default is Patient Dashboard; allow clinical assessment flow & info pages
+  if (isPatient) {
+    if (hash.includes('/patient/analyses')) return 'patient-analyses'
+    if (hash.includes('/patient/reports')) return 'patient-reports'
+    if (hash.includes('/patient/symptoms')) return 'patient-symptoms'
+    if (hash.includes('/patient/recommendations')) return 'patient-recommendations'
+    if (hash.includes('/patient/notifications')) return 'patient-notifications'
+    if (hash.includes('/patient/profile')) return 'patient-profile'
+    if (hash.includes('/patient/feedback')) return 'patient-feedback'
+    if (hash.includes('history')) return 'history'
+    if (hash.includes('how-it-works')) return 'how-it-works'
+    if (hash.includes('health-analysis')) return 'health-analysis'
+    if (hash.includes('about')) return 'about'
+    if (hash.includes('contact')) return 'contact'
+    if (hash.includes('patient-details')) return 'patient-details'
+    if (hash.includes('symptom-categories')) return 'symptom-categories'
+    if (hash.includes('review')) return 'review'
+    if (hash.includes('analyzing')) return 'analyzing'
+    if (hash.includes('report')) return 'report'
+    // Default patient destination is ALWAYS patient-dashboard
+    return 'patient-dashboard'
+  }
+
+  // 3. Unauthenticated / Public Visitor
+  if (hash.includes('/admin/login') || hash.startsWith('#/admin') || path.includes('/admin')) {
+    return 'admin-login'
+  }
+  if (hash.startsWith('#/patient') || path.includes('/patient')) {
+    return 'auth'
+  }
+  if (hash.includes('auth') || hash.includes('login') || hash.includes('signin')) {
+    return 'auth'
+  }
+  if (hash.includes('history')) {
+    return 'auth'
+  }
+  if (hash.includes('how-it-works')) return 'how-it-works'
+  if (hash.includes('health-analysis')) return 'health-analysis'
+  if (hash.includes('about')) return 'about'
+  if (hash.includes('contact')) return 'contact'
+  if (hash.includes('patient-details')) return 'patient-details'
+  if (hash.includes('symptom-categories')) return 'symptom-categories'
+  if (hash.includes('review')) return 'review'
+  if (hash.includes('analyzing')) return 'analyzing'
+  if (hash.includes('report')) return 'report'
+
+  // Default public view is ALWAYS public home
+  return 'home'
+}
+
 export default function App() {
-  const [page, setPage] = useState<Page>('home')
+  const initialAuth = getAuthState()
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(initialAuth.isPatient)
+  const [user, setUser] = useState<User | null>(initialAuth.patientUser)
+  const [page, setPage] = useState<Page>(() => resolveRoute(initialAuth.isAdmin, initialAuth.isPatient))
   const [adminDetailId, setAdminDetailId] = useState<string | undefined>(undefined)
   const [returnToPage, setReturnToPage] = useState<Page>('home')
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
-  const [user, setUser] = useState<User | null>(null)
   const [patientDetails, setPatientDetails] = useState<PatientDetails>(INITIAL_PATIENT)
   const [selectedSymptoms, setSelectedSymptoms] = useState<Record<string, SelectedSymptom>>({})
   const [currentCategory, setCurrentCategory] = useState<string | null>(null)
   const [currentPrediction, setCurrentPrediction] = useState<PredictionResponse | null>(null)
 
-  // Initialize session on mount + handle /admin and /patient URL routing
+  // Initialize session on mount + handle URL hash routing with role enforcement
   useEffect(() => {
-    const token = getAccessToken()
-    const storedUser = getStoredUser()
-    const adminToken = localStorage.getItem('caretrack_admin_access_token')
-    const adminUserStr = localStorage.getItem('caretrack_admin_user')
-
-    if (token) {
-      setIsAuthenticated(true)
-      setUser(storedUser)
+    const syncRouteAndAuth = () => {
+      const auth = getAuthState()
+      setIsAuthenticated(auth.isPatient)
+      setUser(auth.patientUser)
+      const targetPage = resolveRoute(auth.isAdmin, auth.isPatient)
+      setPage(targetPage)
     }
 
-    const resolveRouteFromUrl = () => {
-      const path = window.location.pathname.toLowerCase()
-      const hash = window.location.hash.toLowerCase()
-
-      if (hash.startsWith('#/admin') || hash === '#admin' || path.includes('/admin')) {
-        if (hash.includes('/admin/login')) {
-          setPage('admin-login')
-        } else if (hash.includes('/admin/patients')) {
-          setPage('admin-patients')
-        } else if (hash.includes('/admin/analyses')) {
-          setPage('admin-analyses')
-        } else if (hash.includes('/admin/reports')) {
-          setPage('admin-reports')
-        } else if (hash.includes('/admin/ai') || hash.includes('/admin/models')) {
-          setPage('admin-ai-monitoring')
-        } else if (hash.includes('/admin/symptoms')) {
-          setPage('admin-symptoms')
-        } else if (hash.includes('/admin/notifications')) {
-          setPage('admin-notifications')
-        } else if (hash.includes('/admin/feedback')) {
-          setPage('admin-feedback')
-        } else if (hash.includes('/admin/system')) {
-          setPage('admin-system')
-        } else if (hash.includes('/admin/audit')) {
-          setPage('admin-audit')
-        } else {
-          setPage('admin-dashboard')
-        }
-      } else if (hash.startsWith('#/patient') || hash === '#patient' || path.includes('/patient')) {
-        if (hash.includes('/patient/analyses')) {
-          setPage('patient-analyses')
-        } else if (hash.includes('/patient/reports')) {
-          setPage('patient-reports')
-        } else if (hash.includes('/patient/symptoms')) {
-          setPage('patient-symptoms')
-        } else if (hash.includes('/patient/recommendations')) {
-          setPage('patient-recommendations')
-        } else if (hash.includes('/patient/notifications')) {
-          setPage('patient-notifications')
-        } else if (hash.includes('/patient/profile')) {
-          setPage('patient-profile')
-        } else if (hash.includes('/patient/feedback')) {
-          setPage('patient-feedback')
-        } else {
-          setPage('patient-dashboard')
-        }
-      }
-    }
-
-    resolveRouteFromUrl()
-
-    // Role-based initial redirect: if page is still 'home' (no hash override)
-    // and the user has a valid session, route them to the correct dashboard
-    const hash = window.location.hash.toLowerCase()
-    const hasExplicitHash = hash && hash !== '#' && hash !== '#/'
-    if (!hasExplicitHash) {
-      if (adminToken && adminUserStr) {
-        // Authenticated admin — go directly to admin dashboard
-        setPage('admin-dashboard')
-        window.location.hash = '/admin/dashboard'
-      } else if (token && storedUser) {
-        // Authenticated patient — go directly to patient dashboard
-        setIsAuthenticated(true)
-        setUser(storedUser)
-        setPage('patient-dashboard')
-        window.location.hash = '/patient/dashboard'
-      }
-    }
-
-    window.addEventListener('hashchange', resolveRouteFromUrl)
-    return () => window.removeEventListener('hashchange', resolveRouteFromUrl)
+    syncRouteAndAuth()
+    window.addEventListener('hashchange', syncRouteAndAuth)
+    return () => window.removeEventListener('hashchange', syncRouteAndAuth)
   }, [])
 
   function navigate(to: Page) {
@@ -167,12 +183,19 @@ export default function App() {
     } else if (to.startsWith('patient-')) {
       const sub = to.replace('patient-', '')
       window.location.hash = `/patient/${sub}`
-    } else if (
-      window.location.hash.startsWith('#/admin') ||
-      window.location.hash === '#admin' ||
-      window.location.hash.startsWith('#/patient') ||
-      window.location.hash === '#patient'
-    ) {
+    } else if (to === 'history') {
+      window.location.hash = '/history'
+    } else if (to === 'how-it-works') {
+      window.location.hash = '/how-it-works'
+    } else if (to === 'health-analysis') {
+      window.location.hash = '/health-analysis'
+    } else if (to === 'about') {
+      window.location.hash = '/about'
+    } else if (to === 'contact') {
+      window.location.hash = '/contact'
+    } else if (to === 'auth') {
+      window.location.hash = '/auth'
+    } else if (to === 'home') {
       window.location.hash = ''
     }
     setPage(to)
@@ -203,16 +226,26 @@ export default function App() {
   }
 
   function handleAuthenticate(authenticatedUser: User) {
-    setIsAuthenticated(true)
-    setUser(authenticatedUser)
+    const auth = getAuthState()
+    if (auth.isAdmin) {
+      setIsAuthenticated(false)
+      setUser(null)
+      navigate('admin-dashboard')
+    } else {
+      setIsAuthenticated(true)
+      setUser(authenticatedUser)
+      navigate('patient-dashboard')
+    }
   }
 
   async function handleLogout() {
     await apiLogout()
-    // Also clear admin tokens if present (e.g. admin logged in via unified login)
     localStorage.removeItem('caretrack_admin_access_token')
     localStorage.removeItem('caretrack_admin_refresh_token')
     localStorage.removeItem('caretrack_admin_user')
+    localStorage.removeItem('caretrack_access_token')
+    localStorage.removeItem('caretrack_refresh_token')
+    localStorage.removeItem('caretrack_user')
     setIsAuthenticated(false)
     setUser(null)
     window.location.hash = ''
