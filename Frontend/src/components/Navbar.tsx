@@ -398,34 +398,44 @@ function NavLink({
   isActive: boolean
   onClick: () => void
 }) {
+  const [isHovered, setIsHovered] = useState(false)
+
   return (
-    <motion.button
+    <button
       onClick={onClick}
-      className="relative px-3.5 h-8 text-[12px] font-medium"
-      whileHover="hover"
-      initial="rest"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={`relative px-3.5 py-1.5 rounded-lg text-[12.5px] transition-all duration-200 flex items-center justify-center select-none border ${
+        isActive
+          ? 'font-semibold text-accent bg-accent/[0.08] border-accent/15 shadow-xs'
+          : isHovered
+          ? 'font-medium text-foreground bg-foreground/[0.04] border-transparent'
+          : 'font-medium text-foreground/70 border-transparent hover:text-foreground'
+      }`}
     >
-      <motion.span
-        className={`relative z-10 transition-colors ${
-          isActive ? 'text-accent font-semibold' : 'text-foreground/75 hover:text-foreground'
-        }`}
-      >
+      <span className="relative z-10 tracking-tight">
         {label}
-      </motion.span>
-      {isActive ? (
+      </span>
+
+      {/* Active bottom indicator bar */}
+      {isActive && (
         <motion.span
-          layoutId="navbar-indicator"
-          className="absolute bottom-0 left-3 right-3 h-0.5 bg-accent rounded-full"
-          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-        />
-      ) : (
-        <motion.span
-          className="absolute bottom-0 left-3 right-3 h-px bg-accent/60 rounded-full"
-          variants={{ rest: { scaleX: 0, opacity: 0 }, hover: { scaleX: 1, opacity: 1 } }}
-          transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-          style={{ originX: 0 }}
+          layoutId="navbar-active-indicator"
+          className="absolute bottom-0 left-2.5 right-2.5 h-[2.5px] bg-accent rounded-full shadow-xs shadow-accent/40"
+          transition={{ type: 'spring', stiffness: 500, damping: 35 }}
         />
       )}
-    </motion.button>
+
+      {/* Subtle hover bottom line indicator for inactive items */}
+      {!isActive && isHovered && (
+        <motion.span
+          initial={{ opacity: 0, scaleX: 0.5 }}
+          animate={{ opacity: 1, scaleX: 1 }}
+          exit={{ opacity: 0, scaleX: 0.5 }}
+          transition={{ duration: 0.15, ease: 'easeOut' }}
+          className="absolute bottom-0 left-3 right-3 h-[1.5px] bg-accent/40 rounded-full"
+        />
+      )}
+    </button>
   )
 }
