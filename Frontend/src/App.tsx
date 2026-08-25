@@ -74,25 +74,50 @@ export default function App() {
       setUser(storedUser)
     }
 
-    // Check if initial URL or hash points to admin
-    const path = window.location.pathname.toLowerCase()
-    const hash = window.location.hash.toLowerCase()
-    if (path.includes('/admin') || hash.includes('/admin') || hash === '#admin') {
-      setPage('admin-dashboard')
-    }
+    const resolveRouteFromUrl = () => {
+      const path = window.location.pathname.toLowerCase()
+      const hash = window.location.hash.toLowerCase()
 
-    const handleHashChange = () => {
-      const h = window.location.hash.toLowerCase()
-      if (h.startsWith('#/admin') || h === '#admin') {
-        setPage('admin-dashboard')
+      if (hash.startsWith('#/admin') || hash === '#admin' || path.includes('/admin')) {
+        if (hash.includes('/admin/login')) {
+          setPage('admin-login')
+        } else if (hash.includes('/admin/patients')) {
+          setPage('admin-patients')
+        } else if (hash.includes('/admin/analyses')) {
+          setPage('admin-analyses')
+        } else if (hash.includes('/admin/reports')) {
+          setPage('admin-reports')
+        } else if (hash.includes('/admin/ai') || hash.includes('/admin/models')) {
+          setPage('admin-ai-monitoring')
+        } else if (hash.includes('/admin/symptoms')) {
+          setPage('admin-symptoms')
+        } else if (hash.includes('/admin/notifications')) {
+          setPage('admin-notifications')
+        } else if (hash.includes('/admin/feedback')) {
+          setPage('admin-feedback')
+        } else if (hash.includes('/admin/system')) {
+          setPage('admin-system')
+        } else if (hash.includes('/admin/audit')) {
+          setPage('admin-audit')
+        } else {
+          setPage('admin-dashboard')
+        }
       }
     }
-    window.addEventListener('hashchange', handleHashChange)
-    return () => window.removeEventListener('hashchange', handleHashChange)
+
+    resolveRouteFromUrl()
+    window.addEventListener('hashchange', resolveRouteFromUrl)
+    return () => window.removeEventListener('hashchange', resolveRouteFromUrl)
   }, [])
 
   function navigate(to: Page) {
     if (to === page) return
+    if (to.startsWith('admin-')) {
+      const sub = to.replace('admin-', '')
+      window.location.hash = `/admin/${sub}`
+    } else if (window.location.hash.startsWith('#/admin') || window.location.hash === '#admin') {
+      window.location.hash = ''
+    }
     setPage(to)
     window.scrollTo({ top: 0, behavior: 'instant' })
   }

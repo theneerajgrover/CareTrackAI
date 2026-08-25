@@ -151,6 +151,17 @@ export default function Navbar({
                         <p className="text-[10px] font-mono text-muted-foreground truncate">{user?.email || 'Authenticated'}</p>
                       </div>
 
+                      {/* Admin Dashboard Option for Admins */}
+                      {(user?.email === 'admin@caretrack.ai' || Boolean(localStorage.getItem('caretrack_admin_access_token'))) && (
+                        <button
+                          onClick={() => go('admin-dashboard')}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-left transition-colors bg-accent/10 text-accent hover:bg-accent/20 mb-1"
+                        >
+                          <Activity size={14} className="text-accent" />
+                          <span>Admin Control Center</span>
+                        </button>
+                      )}
+
                       {/* History Option */}
                       <button
                         onClick={() => go('history')}
@@ -284,22 +295,38 @@ export default function Navbar({
                 ))}
 
                 {isAuthenticated && (
-                  <motion.button
-                    onClick={() => go('history')}
-                    className={`text-left px-3 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 ${
-                      currentPage === 'history'
-                        ? 'bg-accent/10 text-accent font-semibold'
-                        : 'text-foreground hover:bg-secondary'
-                    }`}
-                    custom={NAV_LINKS.length}
-                    variants={mobileNavItem}
-                    initial="closed"
-                    animate="open"
-                    exit="exit"
-                  >
-                    <History size={14} />
-                    Assessment History
-                  </motion.button>
+                  <>
+                    {(user?.email === 'admin@caretrack.ai' || Boolean(localStorage.getItem('caretrack_admin_access_token'))) && (
+                      <motion.button
+                        onClick={() => go('admin-dashboard')}
+                        className="text-left px-3 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 bg-accent/10 text-accent"
+                        custom={NAV_LINKS.length}
+                        variants={mobileNavItem}
+                        initial="closed"
+                        animate="open"
+                        exit="exit"
+                      >
+                        <Activity size={14} />
+                        Admin Control Center
+                      </motion.button>
+                    )}
+                    <motion.button
+                      onClick={() => go('history')}
+                      className={`text-left px-3 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 ${
+                        currentPage === 'history'
+                          ? 'bg-accent/10 text-accent font-semibold'
+                          : 'text-foreground hover:bg-secondary'
+                      }`}
+                      custom={NAV_LINKS.length + 1}
+                      variants={mobileNavItem}
+                      initial="closed"
+                      animate="open"
+                      exit="exit"
+                    >
+                      <History size={14} />
+                      Assessment History
+                    </motion.button>
+                  </>
                 )}
               </div>
 
