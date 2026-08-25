@@ -19,6 +19,7 @@ import NotificationsPage from './pages/NotificationsPage'
 import SystemHealthPage from './pages/SystemHealthPage'
 import AuditLogsPage from './pages/AuditLogsPage'
 import type { SearchResults } from './adminTypes'
+import CareTrackLogo from '../components/CareTrackLogo'
 import './styles/admin.css'
 
 const SIDEBAR_ITEMS = [
@@ -140,11 +141,15 @@ export default function AdminApp({ page, onNavigate, detailId }: AdminAppProps) 
         aria-label="Admin Navigation"
       >
         <div className="admin-sidebar-brand">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-            <Heart size={18} style={{ color: '#a5b4fc' }} />
-            <h1>CareTrack AI</h1>
-          </div>
-          <span>Admin Portal</span>
+          <CareTrackLogo
+            variant="dark"
+            subtitle="Admin Portal"
+            onClick={() => {
+              setSidebarOpen(false)
+              nav('admin-dashboard')
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }}
+          />
         </div>
 
         <nav aria-label="Admin Navigation Links" style={{ padding: '12px 12px 24px', display: 'flex', flexDirection: 'column' }}>

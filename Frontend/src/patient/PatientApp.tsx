@@ -14,6 +14,7 @@ import PatientNotificationsPage from './pages/PatientNotificationsPage'
 import PatientProfilePage from './pages/PatientProfilePage'
 import PatientFeedbackPage from './pages/PatientFeedbackPage'
 import { getPredictionDetails } from '../services/api'
+import CareTrackLogo from '../components/CareTrackLogo'
 import './styles/patient.css'
 
 interface PatientAppProps {
@@ -149,11 +150,15 @@ export default function PatientApp({
         aria-label="Patient Portal Navigation"
       >
         <div className="patient-sidebar-brand">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-            <Heart size={18} style={{ color: '#a5b4fc' }} />
-            <h1>CareTrack AI</h1>
-          </div>
-          <span>Patient Portal</span>
+          <CareTrackLogo
+            variant="dark"
+            subtitle="Patient Portal"
+            onClick={() => {
+              setSidebarOpen(false)
+              onNavigate('patient-dashboard')
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }}
+          />
         </div>
 
         <nav aria-label="Patient Navigation Links" style={{ padding: '12px 12px 24px', display: 'flex', flexDirection: 'column', flex: 1 }}>

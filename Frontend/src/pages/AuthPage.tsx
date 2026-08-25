@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Eye, EyeOff, Activity, ArrowLeft, ArrowRight, AlertCircle, Sparkles } from 'lucide-react'
 import { login, register } from '../services/api'
 import AnimatedVisual3D from '../components/AnimatedVisual3D'
+import CareTrackLogo from '../components/CareTrackLogo'
 import { fadeUp, staggerContainer, staggerItem, buttonHover, buttonTap, shakeX } from '../motion/variants'
 import type { Page, User } from '../types'
 
@@ -63,10 +64,10 @@ export default function AuthPage({ mode, onModeChange, onNavigate, onAuthenticat
   const inputBase = 'w-full h-11 px-4 rounded-xl border border-border bg-card text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-all'
 
   return (
-    <div className="min-h-screen flex bg-background">
-      {/* ── Left panel (dark) ── */}
+    <div className="min-h-screen bg-background flex">
+      {/* ── Left Column: Brand Hero Visual ── */}
       <motion.div
-        className="hidden lg:flex lg:w-[50%] relative bg-foreground flex-col justify-between p-12 overflow-hidden"
+        className="hidden lg:flex lg:w-1/2 relative bg-[#0B0F19] flex-col justify-between p-12 overflow-hidden border-r border-border"
         initial={{ opacity: 0, x: -40 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
@@ -75,13 +76,8 @@ export default function AuthPage({ mode, onModeChange, onNavigate, onAuthenticat
         <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 70% at 50% 50%, rgba(67,56,202,0.25) 0%, transparent 70%)' }} />
 
         {/* Logo */}
-        <motion.div className="relative z-10 flex items-center gap-2.5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3, duration: 0.5 }}>
-          <div className="w-7 h-7 rounded-lg bg-accent flex items-center justify-center">
-            <Activity size={14} className="text-white" strokeWidth={2.5} />
-          </div>
-          <span className="font-bold text-white text-[14px]">
-            CareTrack <span style={{ color: '#818CF8' }}>AI</span>
-          </span>
+        <motion.div className="relative z-10" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3, duration: 0.5 }}>
+          <CareTrackLogo variant="dark" onClick={() => onNavigate('home')} />
         </motion.div>
 
         {/* 3D Visual Center */}

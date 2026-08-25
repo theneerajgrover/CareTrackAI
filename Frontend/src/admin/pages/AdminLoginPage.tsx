@@ -1,23 +1,24 @@
 import { useState } from 'react'
-import { Heart, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { adminLogin } from '../services/adminApi'
 import type { AdminUser } from '../adminTypes'
+import CareTrackLogo from '../../components/CareTrackLogo'
 
-interface Props {
-  onLogin: (admin: AdminUser) => void
+interface AdminLoginPageProps {
+  onLogin: (adminUser: AdminUser) => void
 }
 
-export default function AdminLoginPage({ onLogin }: Props) {
+export default function AdminLoginPage({ onLogin }: AdminLoginPageProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [remember, setRemember] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
+    setError(null)
 
     if (!email.trim()) { setError('Email is required'); return }
     if (!password) { setError('Password is required'); return }
@@ -25,7 +26,7 @@ export default function AdminLoginPage({ onLogin }: Props) {
     setLoading(true)
     try {
       const res = await adminLogin(email.trim(), password)
-      onLogin(res.admin)
+      onLogin(res.admin_user || (res as any).admin)
     } catch (err: any) {
       setError(err.message || 'Login failed')
     } finally {
@@ -36,12 +37,14 @@ export default function AdminLoginPage({ onLogin }: Props) {
   return (
     <div className="admin-login-container">
       <div className="admin-login-card animate-scale-in">
-        <div className="admin-login-brand">
-          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 48, height: 48, borderRadius: 12, background: 'linear-gradient(135deg, #4338CA, #7C3AED)', marginBottom: 12 }}>
-            <Heart size={24} color="#fff" />
-          </div>
-          <h1>CareTrack AI</h1>
-          <p>Admin Portal — Secure Access</p>
+        <div className="admin-login-brand flex flex-col items-center justify-center mb-6 text-center">
+          <CareTrackLogo
+            size="lg"
+            variant="light"
+            subtitle="Admin Portal — Secure Access"
+            clickable={false}
+            className="flex-col items-center justify-center text-center"
+          />
         </div>
 
         {error && <div className="admin-login-error">{error}</div>}

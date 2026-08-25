@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { mobileMenu, mobileMenuBackdrop, mobileNavItem, buttonTap, buttonHover } from '../motion/variants'
 import type { Page, User } from '../types'
+import CareTrackLogo from './CareTrackLogo'
 
 interface NavbarProps {
   currentPage: Page
@@ -60,6 +61,17 @@ export default function Navbar({
     window.scrollTo({ top: 0, behavior: 'instant' })
   }
 
+  function handleLogoClick() {
+    setMenuOpen(false)
+    setUserDropdownOpen(false)
+    if (currentPage === 'home') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } else {
+      onNavigate('home')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }
+
   return (
     <>
       <motion.nav
@@ -80,19 +92,9 @@ export default function Navbar({
 
         <div className="relative max-w-7xl mx-auto px-6 md:px-10 flex items-center justify-between gap-4">
           {/* 1. Left: Logo */}
-          <motion.button
-            onClick={() => go('home')}
-            className="flex items-center gap-2.5 flex-shrink-0 z-10"
-            whileHover={{ opacity: 0.85 }}
-            whileTap={{ scale: 0.97 }}
-          >
-            <div className="w-7 h-7 rounded-lg bg-accent flex items-center justify-center shadow-md shadow-accent/20">
-              <Activity size={14} className="text-white" strokeWidth={2.5} />
-            </div>
-            <span className="font-bold text-[14px] tracking-tight text-foreground whitespace-nowrap">
-              CareTrack <span className="text-accent">AI</span>
-            </span>
-          </motion.button>
+          <div className="flex items-center flex-shrink-0 z-10">
+            <CareTrackLogo onClick={handleLogoClick} />
+          </div>
 
           {/* 2. Middle: Desktop Navigation Links (No absolute positioning to prevent overlap) */}
           <div className="hidden lg:flex items-center gap-1 z-10">
