@@ -90,6 +90,10 @@ export default function AdminApp({ page, onNavigate, detailId }: AdminAppProps) 
 
   const handleLogout = useCallback(async () => {
     await adminLogout()
+    // Also clear patient-side tokens set during unified login
+    localStorage.removeItem('caretrack_access_token')
+    localStorage.removeItem('caretrack_refresh_token')
+    localStorage.removeItem('caretrack_user')
     setAdminUser(null)
     onNavigate('home')
   }, [onNavigate])

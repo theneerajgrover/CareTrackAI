@@ -78,6 +78,9 @@ export default function App() {
   useEffect(() => {
     const token = getAccessToken()
     const storedUser = getStoredUser()
+    const adminToken = localStorage.getItem('caretrack_admin_access_token')
+    const adminUserStr = localStorage.getItem('caretrack_admin_user')
+
     if (token) {
       setIsAuthenticated(true)
       setUser(storedUser)
@@ -133,6 +136,25 @@ export default function App() {
     }
 
     resolveRouteFromUrl()
+
+    // Role-based initial redirect: if page is still 'home' (no hash override)
+    // and the user has a valid session, route them to the correct dashboard
+    const hash = window.location.hash.toLowerCase()
+    const hasExplicitHash = hash && hash !== '#' && hash !== '#/'
+    if (!hasExplicitHash) {
+      if (adminToken && adminUserStr) {
+        // Authenticated admin — go directly to admin dashboard
+        setPage('admin-dashboard')
+        window.location.hash = '/admin/dashboard'
+      } else if (token && storedUser) {
+        // Authenticated patient — go directly to patient dashboard
+        setIsAuthenticated(true)
+        setUser(storedUser)
+        setPage('patient-dashboard')
+        window.location.hash = '/patient/dashboard'
+      }
+    }
+
     window.addEventListener('hashchange', resolveRouteFromUrl)
     return () => window.removeEventListener('hashchange', resolveRouteFromUrl)
   }, [])
@@ -187,10 +209,15 @@ export default function App() {
 
   async function handleLogout() {
     await apiLogout()
+    // Also clear admin tokens if present (e.g. admin logged in via unified login)
+    localStorage.removeItem('caretrack_admin_access_token')
+    localStorage.removeItem('caretrack_admin_refresh_token')
+    localStorage.removeItem('caretrack_admin_user')
     setIsAuthenticated(false)
     setUser(null)
     window.location.hash = ''
-    navigate('home')
+    setPage('home')
+    window.scrollTo({ top: 0, behavior: 'instant' })
   }
 
   function toggleSymptom(symptom: SelectedSymptom) {
