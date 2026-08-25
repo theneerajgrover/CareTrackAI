@@ -16,8 +16,9 @@ import AnalyzingPage from './pages/AnalyzingPage'
 import ReportPage from './pages/ReportPage'
 import AdminApp from './admin/AdminApp'
 import type { AdminPage } from './admin/adminTypes'
+import PatientApp from './patient/PatientApp'
 import { getAccessToken, getStoredUser, clearAuthSession, logout as apiLogout } from './services/api'
-import type { Page, PatientDetails, SelectedSymptom, PredictionResponse, User } from './types'
+import type { Page, PatientPage, PatientDetails, SelectedSymptom, PredictionResponse, User } from './types'
 import { pageVariants } from './motion/variants'
 
 const INITIAL_PATIENT: PatientDetails = {
@@ -30,7 +31,7 @@ const INITIAL_PATIENT: PatientDetails = {
   weight: '',
 }
 
-// Hide navbar during clinical health assessment flow or in admin portal
+// Hide navbar during clinical health assessment flow or in dedicated portals
 const NO_NAVBAR_PAGES: Page[] = [
   'patient-details',
   'symptom-categories',
@@ -38,6 +39,14 @@ const NO_NAVBAR_PAGES: Page[] = [
   'review',
   'analyzing',
   'report',
+  'patient-dashboard',
+  'patient-analyses',
+  'patient-reports',
+  'patient-symptoms',
+  'patient-recommendations',
+  'patient-notifications',
+  'patient-profile',
+  'patient-feedback',
   'admin-login',
   'admin-dashboard',
   'admin-patients',
@@ -65,7 +74,7 @@ export default function App() {
   const [currentCategory, setCurrentCategory] = useState<string | null>(null)
   const [currentPrediction, setCurrentPrediction] = useState<PredictionResponse | null>(null)
 
-  // Initialize session on mount + handle /admin URL routing
+  // Initialize session on mount + handle /admin and /patient URL routing
   useEffect(() => {
     const token = getAccessToken()
     const storedUser = getStoredUser()
@@ -102,6 +111,24 @@ export default function App() {
         } else {
           setPage('admin-dashboard')
         }
+      } else if (hash.startsWith('#/patient') || hash === '#patient' || path.includes('/patient')) {
+        if (hash.includes('/patient/analyses')) {
+          setPage('patient-analyses')
+        } else if (hash.includes('/patient/reports')) {
+          setPage('patient-reports')
+        } else if (hash.includes('/patient/symptoms')) {
+          setPage('patient-symptoms')
+        } else if (hash.includes('/patient/recommendations')) {
+          setPage('patient-recommendations')
+        } else if (hash.includes('/patient/notifications')) {
+          setPage('patient-notifications')
+        } else if (hash.includes('/patient/profile')) {
+          setPage('patient-profile')
+        } else if (hash.includes('/patient/feedback')) {
+          setPage('patient-feedback')
+        } else {
+          setPage('patient-dashboard')
+        }
       }
     }
 
@@ -115,7 +142,15 @@ export default function App() {
     if (to.startsWith('admin-')) {
       const sub = to.replace('admin-', '')
       window.location.hash = `/admin/${sub}`
-    } else if (window.location.hash.startsWith('#/admin') || window.location.hash === '#admin') {
+    } else if (to.startsWith('patient-')) {
+      const sub = to.replace('patient-', '')
+      window.location.hash = `/patient/${sub}`
+    } else if (
+      window.location.hash.startsWith('#/admin') ||
+      window.location.hash === '#admin' ||
+      window.location.hash.startsWith('#/patient') ||
+      window.location.hash === '#patient'
+    ) {
       window.location.hash = ''
     }
     setPage(to)
@@ -128,7 +163,7 @@ export default function App() {
     setSelectedSymptoms({})
     setCurrentCategory(null)
     setCurrentPrediction(null)
-    setReturnToPage('home')
+    setReturnToPage(page.startsWith('patient-') ? 'patient-dashboard' : 'home')
     navigate('patient-details')
   }
 
@@ -141,7 +176,7 @@ export default function App() {
     setCurrentPrediction(prediction)
     setPatientDetails(patient)
     setSelectedSymptoms(symptoms)
-    setReturnToPage('history')
+    setReturnToPage(page.startsWith('patient-') ? 'patient-dashboard' : 'history')
     navigate('report')
   }
 
@@ -186,137 +221,147 @@ export default function App() {
         />
       )}
 
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={page}
-          variants={pageVariants}
-          initial="initial"
-          animate="animate"
-          exit="exit"
-          style={{ willChange: 'opacity, transform, filter' }}
-        >
-          {page === 'home' && (
-            <HomePage
-              onNavigate={navigate}
-              onStartHealthCheck={handleStartHealthCheck}
-            />
-          )}
+      {page.startsWith('admin-') ? (
+        <AdminApp
+          page={page as AdminPage}
+          detailId={adminDetailId}
+          onNavigate={(target) => {
+            if (target === 'home') {
+              navigate('home')
+            } else {
+              navigate(target as Page)
+            }
+          }}
+        />
+      ) : page.startsWith('patient-') ? (
+        <PatientApp
+          page={page as PatientPage}
+          user={user}
+          onNavigate={navigate}
+          onStartHealthCheck={handleStartHealthCheck}
+          onLogout={handleLogout}
+          onViewHistoryReport={handleViewHistoryReport}
+          onUpdateUser={(updated) => setUser(updated)}
+        />
+      ) : (
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={page}
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            style={{ willChange: 'opacity, transform, filter' }}
+          >
+            {page === 'home' && (
+              <HomePage
+                onNavigate={navigate}
+                onStartHealthCheck={handleStartHealthCheck}
+              />
+            )}
 
-          {page === 'how-it-works' && (
-            <HowItWorksPage
-              onNavigate={navigate}
-              onStartHealthCheck={handleStartHealthCheck}
-            />
-          )}
+            {page === 'how-it-works' && (
+              <HowItWorksPage
+                onNavigate={navigate}
+                onStartHealthCheck={handleStartHealthCheck}
+              />
+            )}
 
-          {page === 'health-analysis' && (
-            <HealthAnalysisPage
-              onNavigate={navigate}
-              onStartHealthCheck={handleStartHealthCheck}
-            />
-          )}
+            {page === 'health-analysis' && (
+              <HealthAnalysisPage
+                onNavigate={navigate}
+                onStartHealthCheck={handleStartHealthCheck}
+              />
+            )}
 
-          {page === 'about' && (
-            <AboutPage
-              onNavigate={navigate}
-              onStartHealthCheck={handleStartHealthCheck}
-            />
-          )}
+            {page === 'about' && (
+              <AboutPage
+                onNavigate={navigate}
+                onStartHealthCheck={handleStartHealthCheck}
+              />
+            )}
 
-          {page === 'contact' && <ContactPage onNavigate={navigate} />}
+            {page === 'contact' && <ContactPage onNavigate={navigate} />}
 
-          {page === 'history' && (
-            <HistoryPage
-              onNavigate={navigate}
-              onStartHealthCheck={handleStartHealthCheck}
-              onViewFullReport={handleViewHistoryReport}
-              isAuthenticated={isAuthenticated}
-            />
-          )}
+            {page === 'history' && (
+              <HistoryPage
+                onNavigate={navigate}
+                onStartHealthCheck={handleStartHealthCheck}
+                onViewFullReport={handleViewHistoryReport}
+                isAuthenticated={isAuthenticated}
+              />
+            )}
 
-          {page === 'auth' && (
-            <AuthPage
-              mode={authMode}
-              onModeChange={setAuthMode}
-              onNavigate={navigate}
-              onAuthenticate={handleAuthenticate}
-            />
-          )}
+            {page === 'auth' && (
+              <AuthPage
+                mode={authMode}
+                onModeChange={setAuthMode}
+                onNavigate={navigate}
+                onAuthenticate={handleAuthenticate}
+              />
+            )}
 
-          {page === 'patient-details' && (
-            <PatientDetailsPage
-              details={patientDetails}
-              onSave={setPatientDetails}
-              onNavigate={navigate}
-            />
-          )}
+            {page === 'patient-details' && (
+              <PatientDetailsPage
+                details={patientDetails}
+                onSave={setPatientDetails}
+                onNavigate={navigate}
+              />
+            )}
 
-          {page === 'symptom-categories' && (
-            <SymptomCategoriesPage
-              selectedSymptoms={selectedSymptoms}
-              onSelectCategory={handleSelectCategory}
-              onNavigate={navigate}
-            />
-          )}
+            {page === 'symptom-categories' && (
+              <SymptomCategoriesPage
+                selectedSymptoms={selectedSymptoms}
+                onSelectCategory={handleSelectCategory}
+                onNavigate={navigate}
+              />
+            )}
 
-          {page === 'symptom-subcategory' && currentCategory && (
-            <SymptomSubcategoryPage
-              categoryId={currentCategory}
-              selectedSymptoms={selectedSymptoms}
-              onToggle={toggleSymptom}
-              onNavigate={navigate}
-              onSelectMore={() => navigate('symptom-categories')}
-            />
-          )}
+            {page === 'symptom-subcategory' && currentCategory && (
+              <SymptomSubcategoryPage
+                categoryId={currentCategory}
+                selectedSymptoms={selectedSymptoms}
+                onToggle={toggleSymptom}
+                onNavigate={navigate}
+                onSelectMore={() => navigate('symptom-categories')}
+              />
+            )}
 
-          {page === 'review' && (
-            <ReviewPage
-              patientDetails={patientDetails}
-              selectedSymptoms={selectedSymptoms}
-              onNavigate={navigate}
-              onEditSymptoms={() => navigate('symptom-categories')}
-            />
-          )}
+            {page === 'review' && (
+              <ReviewPage
+                patientDetails={patientDetails}
+                selectedSymptoms={selectedSymptoms}
+                onNavigate={navigate}
+                onEditSymptoms={() => navigate('symptom-categories')}
+              />
+            )}
 
-          {page === 'analyzing' && (
-            <AnalyzingPage
-              symptomCount={Object.keys(selectedSymptoms).length}
-              selectedSymptoms={selectedSymptoms}
-              patientDetails={patientDetails}
-              onNavigate={navigate}
-              onPredictionComplete={(data) => {
-                setCurrentPrediction(data)
-                setReturnToPage('home')
-              }}
-            />
-          )}
+            {page === 'analyzing' && (
+              <AnalyzingPage
+                symptomCount={Object.keys(selectedSymptoms).length}
+                selectedSymptoms={selectedSymptoms}
+                patientDetails={patientDetails}
+                onNavigate={navigate}
+                onPredictionComplete={(data) => {
+                  setCurrentPrediction(data)
+                  setReturnToPage('home')
+                }}
+              />
+            )}
 
-          {page === 'report' && (
-            <ReportPage
-              patientDetails={patientDetails}
-              selectedSymptoms={selectedSymptoms}
-              predictionData={currentPrediction}
-              returnPage={returnToPage}
-              onNavigate={navigate}
-              onStartNew={handleStartHealthCheck}
-            />
-          )}
-
-          {page.startsWith('admin-') && (
-            <AdminApp
-              page={page as AdminPage}
-              detailId={adminDetailId}
-              onNavigate={(target) => {
-                if (target === 'home') {
-                  navigate('home')
-                } else {
-                  navigate(target as Page)
-                }
-              }}
-            />
-          )}
-        </motion.div>
-      </AnimatePresence>
+            {page === 'report' && (
+              <ReportPage
+                patientDetails={patientDetails}
+                selectedSymptoms={selectedSymptoms}
+                predictionData={currentPrediction}
+                returnPage={returnToPage}
+                onNavigate={navigate}
+                onStartNew={handleStartHealthCheck}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
+      )}
     </div>
   )
 }

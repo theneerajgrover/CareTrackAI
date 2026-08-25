@@ -626,6 +626,188 @@ def get_prediction(prediction_id):
     }), 200
 
 
+# -- Patient Portal Specific Endpoints ------------------------------------------
+
+@app.route("/api/user/profile", methods=["GET", "PUT"])
+@require_auth
+def user_profile():
+    """Get or update authenticated patient's profile."""
+    if request.method == "GET":
+        u = query(
+            "SELECT id, name, email, phone, role, created_at FROM users WHERE id = %s",
+            (g.user_id,), fetch_one=True,
+        )
+        if not u:
+            return jsonify({"error": "User not found"}), 404
+        return jsonify({
+            "user": {
+                "id": str(u["id"]),
+                "name": u["name"],
+                "email": u["email"],
+                "phone": u.get("phone") or "",
+                "role": u.get("role", "patient"),
+                "created_at": u["created_at"].isoformat() if u.get("created_at") else None,
+            }
+        }), 200
+
+    # PUT update profile
+    data = request.get_json() or {}
+    name = data.get("name", "").strip()
+    phone = data.get("phone", "").strip()
+
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+
+    execute(
+        "UPDATE users SET name = %s, phone = %s, updated_at = NOW() WHERE id = %s",
+        (name, phone, g.user_id),
+    )
+    return jsonify({
+        "message": "Profile updated successfully",
+        "user": {
+            "id": str(g.user_id),
+            "name": name,
+            "email": g.user_email,
+            "phone": phone,
+        }
+    }), 200
+
+
+@app.route("/api/user/stats", methods=["GET"])
+@require_auth
+def user_stats():
+    """Summary metrics for the authenticated patient's personal health dashboard."""
+    total_preds = query(
+        "SELECT COUNT(*) as count FROM predictions WHERE user_id = %s",
+        (g.user_id,), fetch_one=True
+    )["count"]
+
+    latest = query(
+        """SELECT p.id, p.patient_name, p.created_at, p.symptom_ids,
+                  pr.disease_id, pr.confidence_pct, pr.risk_level, pr.remedies_text, pr.warning_text,
+                  d.name as disease_name
+           FROM predictions p
+           LEFT JOIN prediction_results pr ON pr.prediction_id = p.id AND pr.rank = 1
+           LEFT JOIN diseases d ON pr.disease_id = d.id
+           WHERE p.user_id = %s
+           ORDER BY p.created_at DESC LIMIT 1""",
+        (g.user_id,), fetch_one=True
+    )
+
+    # Count high/critical risk findings
+    critical_count = query(
+        """SELECT COUNT(DISTINCT p.id) as count
+           FROM predictions p
+           JOIN prediction_results pr ON pr.prediction_id = p.id
+           WHERE p.user_id = %s AND pr.risk_level IN ('high', 'critical')""",
+        (g.user_id,), fetch_one=True
+    )["count"]
+
+    latest_data = None
+    if latest:
+        latest_data = {
+            "id": str(latest["id"]),
+            "patient_name": latest["patient_name"],
+            "created_at": latest["created_at"].isoformat() if latest.get("created_at") else None,
+            "disease": latest["disease_name"] or "Health Check",
+            "confidence": float(latest["confidence_pct"]) if latest.get("confidence_pct") else None,
+            "risk_level": latest.get("risk_level") or "low",
+            "remedies": latest.get("remedies_text"),
+            "warning": latest.get("warning_text"),
+            "symptom_count": len(latest.get("symptom_ids") or []),
+        }
+
+    return jsonify({
+        "stats": {
+            "total_analyses": total_preds,
+            "total_reports": total_preds,
+            "critical_alerts": critical_count,
+            "latest_analysis": latest_data,
+        }
+    }), 200
+
+
+@app.route("/api/user/notifications", methods=["GET"])
+@require_auth
+def user_notifications():
+    """List active notifications relevant to patient."""
+    rows = query(
+        """SELECT id, title, message, type, created_at
+           FROM notifications
+           WHERE (target_type = 'all_patients' OR target_user_id = %s)
+             AND status = 'sent'
+           ORDER BY created_at DESC LIMIT 20""",
+        (g.user_id,), fetch_all=True
+    )
+    return jsonify({
+        "notifications": [
+            {
+                "id": str(r["id"]),
+                "title": r["title"],
+                "message": r["message"],
+                "type": r.get("type", "info"),
+                "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+            }
+            for r in (rows or [])
+        ]
+    }), 200
+
+
+@app.route("/api/user/feedback", methods=["GET", "POST"])
+@require_auth
+def user_feedback():
+    """Submit or list patient's feedback."""
+    if request.method == "POST":
+        data = request.get_json() or {}
+        subject = data.get("subject", "").strip()
+        message = data.get("message", "").strip()
+        rating = data.get("rating")
+        priority = data.get("priority", "medium")
+
+        if not message:
+            return jsonify({"error": "Message is required"}), 400
+
+        u = query("SELECT name, email FROM users WHERE id = %s", (g.user_id,), fetch_one=True)
+        user_name = u["name"] if u else "Patient"
+        user_email = u["email"] if u else g.user_email
+
+        fb = execute_returning(
+            """INSERT INTO feedback (user_id, user_name, user_email, subject, message, rating, priority, status)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, 'new')
+               RETURNING id, created_at""",
+            (g.user_id, user_name, user_email, subject or "General Feedback", message, rating, priority)
+        )
+        return jsonify({
+            "message": "Feedback submitted successfully. Thank you!",
+            "id": str(fb["id"]),
+        }), 201
+
+    # GET past feedback
+    rows = query(
+        """SELECT id, subject, message, rating, priority, status, admin_response, responded_at, created_at
+           FROM feedback
+           WHERE user_id = %s
+           ORDER BY created_at DESC LIMIT 30""",
+        (g.user_id,), fetch_all=True
+    )
+    return jsonify({
+        "feedback": [
+            {
+                "id": str(r["id"]),
+                "subject": r["subject"],
+                "message": r["message"],
+                "rating": r["rating"],
+                "priority": r["priority"],
+                "status": r["status"],
+                "admin_response": r.get("admin_response"),
+                "responded_at": r["responded_at"].isoformat() if r.get("responded_at") else None,
+                "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+            }
+            for r in (rows or [])
+        ]
+    }), 200
+
+
 # -- Symptoms & Diseases Endpoints ---------------------------------------------
 
 @app.route("/api/symptoms", methods=["GET"])

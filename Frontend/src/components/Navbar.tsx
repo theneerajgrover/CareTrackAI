@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
 import {
   Menu, X, Activity, ArrowRight, History, LogOut, User as UserIcon,
-  ChevronDown, Sparkles, FileText
+  ChevronDown, Sparkles, FileText, LayoutDashboard
 } from 'lucide-react'
 import { mobileMenu, mobileMenuBackdrop, mobileNavItem, buttonTap, buttonHover } from '../motion/variants'
 import type { Page, User } from '../types'
@@ -161,6 +161,19 @@ export default function Navbar({
                           <span>Admin Control Center</span>
                         </button>
                       )}
+
+                      {/* Patient Health Dashboard Option */}
+                      <button
+                        onClick={() => go('patient-dashboard')}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-left transition-colors ${
+                          currentPage === 'patient-dashboard'
+                            ? 'bg-accent text-white'
+                            : 'text-foreground hover:bg-secondary'
+                        }`}
+                      >
+                        <LayoutDashboard size={14} className={currentPage === 'patient-dashboard' ? 'text-white' : 'text-accent'} />
+                        <span>My Health Dashboard</span>
+                      </button>
 
                       {/* History Option */}
                       <button

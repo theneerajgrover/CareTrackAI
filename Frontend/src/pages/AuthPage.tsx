@@ -41,12 +41,12 @@ export default function AuthPage({ mode, onModeChange, onNavigate, onAuthenticat
         if (res.is_admin) {
           onNavigate('admin-dashboard')
         } else {
-          onNavigate('home')
+          onNavigate('patient-dashboard')
         }
       } else {
         const res = await register(form.name, form.email, form.password, form.phone)
         onAuthenticate(res.user)
-        onNavigate('home')
+        onNavigate('patient-dashboard')
       }
     } catch (err: any) {
       setApiError(err.message || 'Authentication failed. Please check your credentials.')

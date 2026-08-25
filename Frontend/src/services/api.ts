@@ -204,3 +204,51 @@ export async function getModelInfo(): Promise<any> {
 export async function getBackendHealth(): Promise<{ status: string }> {
   return request<{ status: string }>('/health', { method: 'GET' })
 }
+
+export async function getAllSymptoms(): Promise<{ id: number; key: string; label: string; category: string }[]> {
+  const res = await request<{ symptoms: { id: number; key: string; label: string; category: string }[] }>('/symptoms', { method: 'GET' })
+  return res.symptoms || []
+}
+
+// ── Patient Portal Specific APIs ──────────────────────────────────────────────
+
+export async function getUserProfile(): Promise<{ user: User }> {
+  return request<{ user: User }>('/user/profile', { method: 'GET' })
+}
+
+export async function updateUserProfile(name: string, phone: string): Promise<{ message: string; user: User }> {
+  const res = await request<{ message: string; user: User }>('/user/profile', {
+    method: 'PUT',
+    body: JSON.stringify({ name, phone }),
+  })
+  // Keep stored user in sync
+  const stored = getStoredUser()
+  if (stored) {
+    localStorage.setItem('caretrack_user', JSON.stringify({ ...stored, name, phone }))
+  }
+  return res
+}
+
+export async function getUserStats(): Promise<{ stats: import('../types').UserStats }> {
+  return request<{ stats: import('../types').UserStats }>('/user/stats', { method: 'GET' })
+}
+
+export async function getUserNotifications(): Promise<{ notifications: import('../types').PatientNotification[] }> {
+  return request<{ notifications: import('../types').PatientNotification[] }>('/user/notifications', { method: 'GET' })
+}
+
+export async function submitUserFeedback(
+  subject: string,
+  message: string,
+  rating?: number,
+  priority: string = 'medium'
+): Promise<{ message: string; id: string }> {
+  return request<{ message: string; id: string }>('/user/feedback', {
+    method: 'POST',
+    body: JSON.stringify({ subject, message, rating, priority }),
+  })
+}
+
+export async function getUserFeedback(): Promise<{ feedback: import('../types').PatientFeedback[] }> {
+  return request<{ feedback: import('../types').PatientFeedback[] }>('/user/feedback', { method: 'GET' })
+}

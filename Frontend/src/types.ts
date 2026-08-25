@@ -12,6 +12,14 @@ export type Page =
   | 'review'
   | 'analyzing'
   | 'report'
+  | 'patient-dashboard'
+  | 'patient-analyses'
+  | 'patient-reports'
+  | 'patient-symptoms'
+  | 'patient-recommendations'
+  | 'patient-notifications'
+  | 'patient-profile'
+  | 'patient-feedback'
   | 'admin-login'
   | 'admin-dashboard'
   | 'admin-patients'
@@ -25,6 +33,53 @@ export type Page =
   | 'admin-notifications'
   | 'admin-system'
   | 'admin-audit'
+
+export type PatientPage =
+  | 'patient-dashboard'
+  | 'patient-analyses'
+  | 'patient-reports'
+  | 'patient-symptoms'
+  | 'patient-recommendations'
+  | 'patient-notifications'
+  | 'patient-profile'
+  | 'patient-feedback'
+
+export interface UserStats {
+  total_analyses: number
+  total_reports: number
+  critical_alerts: number
+  latest_analysis: {
+    id: string
+    patient_name: string
+    created_at: string | null
+    disease: string
+    confidence: number | null
+    risk_level: string
+    remedies?: string
+    warning?: string
+    symptom_count: number
+  } | null
+}
+
+export interface PatientNotification {
+  id: string
+  title: string
+  message: string
+  type: string
+  created_at: string | null
+}
+
+export interface PatientFeedback {
+  id: string
+  subject: string
+  message: string
+  rating?: number
+  priority: string
+  status: string
+  admin_response?: string
+  responded_at?: string | null
+  created_at: string | null
+}
 
 export interface PatientDetails {
   name: string

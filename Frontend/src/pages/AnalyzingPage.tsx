@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Activity, AlertCircle, RefreshCw } from 'lucide-react'
+import { Activity, AlertCircle, RefreshCw, Clock } from 'lucide-react'
 import { runPrediction } from '../services/api'
 import type { Page, PatientDetails, SelectedSymptom, PredictionResponse } from '../types'
 
@@ -21,6 +21,11 @@ const STAGES = [
 
 const NODE_ANGLES = [0, 60, 120, 180, 240, 300]
 
+// Hard timeout: if no response after 90 seconds, show timeout state
+const HARD_TIMEOUT_MS = 90_000
+
+type AnalysisStatus = 'processing' | 'completed' | 'failed' | 'timed_out'
+
 export default function AnalyzingPage({
   symptomCount,
   selectedSymptoms,
@@ -30,40 +35,100 @@ export default function AnalyzingPage({
 }: AnalyzingPageProps) {
   const [stage, setStage] = useState(0)
   const [progress, setProgress] = useState(0)
-  const [apiResult, setApiResult] = useState<PredictionResponse | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const hasFiredRef = useRef(false)
+  const [status, setStatus] = useState<AnalysisStatus>('processing')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  // 1. Kick off real backend API call strictly once (guards against React StrictMode double invocation)
+  // Stable refs for callbacks — prevents effect re-triggering on parent re-renders
+  const onNavigateRef = useRef(onNavigate)
+  const onPredictionCompleteRef = useRef(onPredictionComplete)
+  const hasFiredRef = useRef(false)
+  const hasNavigatedRef = useRef(false)
+
+  // Keep refs in sync with latest props
+  useEffect(() => { onNavigateRef.current = onNavigate }, [onNavigate])
+  useEffect(() => { onPredictionCompleteRef.current = onPredictionComplete }, [onPredictionComplete])
+
+  // 1. Kick off real backend API call strictly once
   useEffect(() => {
     if (hasFiredRef.current) return
     hasFiredRef.current = true
 
     let isMounted = true
     const symptomKeys = Object.keys(selectedSymptoms)
+    const startTime = Date.now()
+
+    console.log('[REPORT] REPORT_REQUEST_STARTED', { symptoms: symptomKeys.length })
+
+    // Hard timeout guard
+    const hardTimeout = setTimeout(() => {
+      if (isMounted && !hasNavigatedRef.current) {
+        console.warn('[REPORT] REPORT_TIMEOUT after', HARD_TIMEOUT_MS, 'ms')
+        setStatus('timed_out')
+        setErrorMessage('Report generation is taking longer than expected. Your report may still be processing in the background.')
+      }
+    }, HARD_TIMEOUT_MS)
 
     async function callApi() {
       try {
         const res = await runPrediction(symptomKeys, patientDetails)
-        if (isMounted) {
-          setApiResult(res)
+        const elapsed = Date.now() - startTime
+
+        console.log('[REPORT] REPORT_REQUEST_RESPONSE', {
+          prediction_id: res.prediction_id,
+          num_predictions: res.predictions?.length,
+          elapsed_ms: elapsed,
+        })
+
+        if (!isMounted || hasNavigatedRef.current) {
+          console.log('[REPORT] Component unmounted before navigation, report saved in DB')
+          return
         }
+
+        // Validate response
+        if (!res || !res.predictions || !Array.isArray(res.predictions)) {
+          throw new Error('Invalid response from the analysis engine. Please try again.')
+        }
+
+        // Success: fast-forward animation and navigate
+        setProgress(100)
+        setStage(3)
+        setStatus('completed')
+
+        console.log('[REPORT] REPORT_COMPLETED', { prediction_id: res.prediction_id })
+
+        // Brief visual completion pause, then transition
+        setTimeout(() => {
+          if (!hasNavigatedRef.current) {
+            hasNavigatedRef.current = true
+            console.log('[REPORT] REPORT_NAVIGATING to report page')
+            onPredictionCompleteRef.current(res)
+            onNavigateRef.current('report')
+            console.log('[REPORT] REPORT_DISPLAYED')
+          }
+        }, 300)
+
       } catch (err: any) {
-        if (isMounted) {
-          setError(err.message || 'Failed to analyze symptoms with the backend.')
+        const elapsed = Date.now() - startTime
+        console.error('[REPORT] REPORT_ERROR', { error: err.message, elapsed_ms: elapsed })
+
+        if (isMounted && !hasNavigatedRef.current) {
+          setStatus('failed')
+          setErrorMessage(err.message || 'Failed to analyze symptoms with the backend.')
         }
       }
     }
 
     callApi()
+
     return () => {
       isMounted = false
+      clearTimeout(hardTimeout)
     }
-  }, [selectedSymptoms, patientDetails])
+  }, []) // Stable deps only — refs handle latest values
 
   // 2. Drive multi-stage visual loader with fast, responsive intervals
   useEffect(() => {
-    if (error) return
+    if (status !== 'processing') return
 
     const stageTime = 350
     const stageTimers = STAGES.map((_, i) => setTimeout(() => setStage(i), i * stageTime))
@@ -79,40 +144,68 @@ export default function AnalyzingPage({
       stageTimers.forEach(clearTimeout)
       clearInterval(progressTimer)
     }
-  }, [error])
-
-  // 3. When API result arrives, fast-forward progress to 100% and transition immediately (<250ms)
-  useEffect(() => {
-    if (apiResult) {
-      setProgress(100)
-      setStage(3)
-      const t = setTimeout(() => {
-        onPredictionComplete(apiResult)
-        onNavigate('report')
-      }, 250)
-      return () => clearTimeout(t)
-    }
-  }, [apiResult, onNavigate, onPredictionComplete])
+  }, [status])
 
   function polar(angleDeg: number, r: number) {
     const a = (angleDeg * Math.PI) / 180
     return { x: 100 + r * Math.cos(a), y: 100 + r * Math.sin(a) }
   }
 
-  if (error) {
+  // Error state: API failure
+  if (status === 'failed') {
     return (
       <div className="min-h-screen bg-foreground flex flex-col items-center justify-center px-6 text-center text-white">
         <div className="w-12 h-12 rounded-2xl bg-critical/20 text-critical flex items-center justify-center mb-4">
           <AlertCircle size={26} />
         </div>
         <h2 className="text-xl font-bold mb-2">Analysis Could Not Complete</h2>
-        <p className="text-[13px] text-white/70 max-w-md mb-6 leading-relaxed">{error}</p>
+        <p className="text-[13px] text-white/70 max-w-md mb-6 leading-relaxed">{errorMessage}</p>
         <div className="flex gap-3">
           <button
             onClick={() => onNavigate('review')}
             className="px-5 py-2 rounded-full border border-white/20 text-[12px] font-medium text-white hover:bg-white/10"
           >
             Review Symptoms
+          </button>
+          <button
+            onClick={() => {
+              // Reset state and retry
+              hasFiredRef.current = false
+              hasNavigatedRef.current = false
+              setStatus('processing')
+              setProgress(0)
+              setStage(0)
+              setErrorMessage(null)
+              // Re-trigger by forcing remount
+              window.location.reload()
+            }}
+            className="px-5 py-2 rounded-full bg-accent text-white text-[12px] font-semibold flex items-center gap-1.5"
+          >
+            <RefreshCw size={12} />
+            Retry
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Timeout state: backend may still be processing
+  if (status === 'timed_out') {
+    return (
+      <div className="min-h-screen bg-foreground flex flex-col items-center justify-center px-6 text-center text-white">
+        <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-4">
+          <Clock size={26} />
+        </div>
+        <h2 className="text-xl font-bold mb-2">Taking Longer Than Expected</h2>
+        <p className="text-[13px] text-white/70 max-w-md mb-6 leading-relaxed">
+          {errorMessage || 'Your analysis is still processing. The report may appear in your History once completed.'}
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => onNavigate('history')}
+            className="px-5 py-2 rounded-full border border-white/20 text-[12px] font-medium text-white hover:bg-white/10"
+          >
+            View History
           </button>
           <button
             onClick={() => window.location.reload()}
@@ -225,7 +318,7 @@ export default function AnalyzingPage({
 
         {/* Title */}
         <h1 className="text-xl font-bold text-white tracking-tight mb-2">
-          Analyzing {symptomCount} Health Signals
+          Analyzing {symptomCount} Health Signal{symptomCount !== 1 ? 's' : ''}
         </h1>
 
         {/* Dynamic stage subtitle */}
@@ -253,9 +346,10 @@ export default function AnalyzingPage({
           />
         </div>
         <p className="text-[10px] text-white/30 font-mono">
-          Model: Gaussian NB · 713 Diseases · Connecting live to Backend...
+          Model: Gaussian NB · 713 Diseases · {status === 'completed' ? 'Analysis complete' : 'Processing...'}
         </p>
       </div>
     </motion.div>
   )
 }
+
