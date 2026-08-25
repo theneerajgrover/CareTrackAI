@@ -31,8 +31,9 @@ const INITIAL_PATIENT: PatientDetails = {
   weight: '',
 }
 
-// Hide navbar during clinical health assessment flow or in dedicated portals
+// Hide navbar during clinical health assessment flow, auth pages, or in dedicated portals
 const NO_NAVBAR_PAGES: Page[] = [
+  'auth',
   'patient-details',
   'symptom-categories',
   'symptom-subcategory',
