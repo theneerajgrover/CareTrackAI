@@ -91,7 +91,7 @@ export default function AdminApp({ page, onNavigate, detailId }: AdminAppProps) 
   const handleLogout = useCallback(async () => {
     await adminLogout()
     setAdminUser(null)
-    onNavigate('admin-login')
+    onNavigate('home')
   }, [onNavigate])
 
   const handleSearch = useCallback(async (q: string) => {

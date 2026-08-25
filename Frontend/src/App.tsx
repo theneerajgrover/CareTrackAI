@@ -189,6 +189,7 @@ export default function App() {
     await apiLogout()
     setIsAuthenticated(false)
     setUser(null)
+    window.location.hash = ''
     navigate('home')
   }
 
