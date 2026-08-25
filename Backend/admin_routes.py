@@ -1647,11 +1647,16 @@ def get_chatbot_stats():
     )
 
     # 9. Service status
-    has_api_key = bool(os.getenv("OPENAI_API_KEY", "").strip() and not os.getenv("OPENAI_API_KEY", "").startswith("sk-placeholder"))
+    has_openai = bool(os.getenv("OPENAI_API_KEY", "").strip() and not os.getenv("OPENAI_API_KEY", "").startswith("sk-placeholder"))
+    has_gemini = bool(os.getenv("GEMINI_API_KEY", "").strip() and not os.getenv("GEMINI_API_KEY", "").startswith("YOUR_"))
+    is_operational = has_openai or has_gemini
+
+    engine_name = ("OpenAI " + os.getenv("OPENAI_MODEL", "gpt-4o-mini")) if has_openai else "CareTrack Medical AI (Gemini 3.5)"
+
     service_status = {
-        "engine": "OpenAI " + os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-        "status": "operational" if has_api_key else "fallback_active",
-        "api_configured": has_api_key,
+        "engine": engine_name,
+        "status": "operational" if is_operational else "degraded",
+        "api_configured": is_operational,
         "checked_at": datetime.now(timezone.utc).isoformat(),
     }
 

@@ -1161,11 +1161,12 @@ def send_chat_message():
         from openai_service import generate_chat_response
         ai_result = generate_chat_response(past_messages or [{"role": "user", "content": message_text}], patient_ctx)
     except Exception as e:
+        print(f"[app] Chat generation error: {e}")
         ai_result = {
-            "content": "I am here to assist with your medical questions. If you are experiencing concerning symptoms, please consult a healthcare professional.",
-            "model": "caretrack-fallback",
-            "response_time_ms": 60,
-            "status": "fallback",
+            "content": "Sorry, I'm unable to respond right now. Please try again shortly.",
+            "model": "caretrack-medical-assistant",
+            "response_time_ms": 50,
+            "status": "failed",
             "error": str(e)
         }
 

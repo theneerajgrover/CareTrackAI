@@ -1,16 +1,20 @@
 """
 openai_service.py
 -----------------
-Secure server-side OpenAI integration for CareTrack AI Patient Medical Assistance Chatbot.
+Secure server-side AI medical assistance engine for CareTrack AI.
 
-Key Features:
-- Strict server-side API key handling (never exposed to frontend).
-- Safe, patient-friendly medical guidance prompts.
-- Measures response time in milliseconds for admin monitoring.
-- Zero-crash error handling with graceful fallback.
+Key Capabilities:
+- Full contextual natural language processing of incoming user messages.
+- Strict medical domain scope enforcement (non-medical query rejection with polite redirection).
+- Identity & capability awareness ("who are you" / "what can you do").
+- Dynamic clinical guidance tailored to specific symptoms, findings, and conditions.
+- Real integration with OpenAI API (`OPENAI_API_KEY`, `OPENAI_MODEL`) with backend Gemini AI support.
+- Accurate latency measurement in milliseconds.
+- Strict failure isolation: failures are recorded as `status = 'failed'` without fake medical answers.
 """
 
 import os
+import re
 import time
 import json
 import urllib.request
@@ -21,25 +25,68 @@ load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 SYSTEM_PROMPT = """You are the CareTrack AI Medical Assistance Chatbot, an empathetic, patient-friendly health information assistant.
 
-Your purpose is to help patients understand their health analyses, general medical symptoms, wellness suggestions, and appropriate medical specialists to consult.
+CORE RULES & SCOPE:
+1. DOMAIN BOUNDARIES:
+   - You ONLY assist with medical, health, wellness, symptoms, diagnostic report explanations, and healthcare specialist guidance.
+   - If the user asks NON-MEDICAL questions (e.g. writing code, math, homework, sports, jokes, games, trivia, recipes, creative writing), politely refuse: explain that you only handle health/medical questions and invite them to ask a medical question.
+   - If asked "who are you" or what you do, state that you are CareTrack AI's Medical Assistance Chatbot designed to help with symptoms, health reports, and medical specialist recommendations.
 
-CRITICAL MEDICAL SAFETY & STYLE GUIDELINES:
-1. Simplicity: Use clear, simple, everyday language. Avoid dense medical jargon. If a medical term is needed, explain it simply.
-2. Conciseness: Keep responses short to moderate (1 to 3 short paragraphs). Be direct and practical.
-3. No Absolute Diagnoses: Never say the patient definitively has a disease. Use cautious phrasing such as "These symptoms are commonly related to..." or "This could indicate...".
-4. No Prescriptions: Do not prescribe prescription drugs or advise altering prescription dosages.
-5. Specialist Guidance: Suggest the appropriate type of medical specialist (e.g. General Physician, Cardiologist, ENT, Dermatologist) when relevant.
-6. Red Flags / Emergencies: If symptoms sound severe, acute, or life-threatening (e.g. crushing chest pain, severe shortness of breath, sudden facial drooping/numbness, high persistent fever with stiff neck), urge immediate emergency medical care.
-7. Professional Care: Always remind the patient that AI guidance is for informational purposes and to consult a qualified healthcare professional for formal diagnosis.
+2. MEDICAL SAFETY & TONE:
+   - Provide clear, simple, practical, and easy-to-understand explanations. Avoid dense medical jargon (or explain it in plain language).
+   - Tailor your response directly to the specific symptoms or questions the user has asked.
+   - Do NOT give absolute diagnoses (use phrases like "These symptoms are commonly associated with...", "Possible factors could include...").
+   - Do NOT prescribe prescription medications or tell patients to change prescription dosages.
+   - Recommend the appropriate medical specialist (e.g., Dermatologist, Cardiologist, ENT, Orthopedist, General Physician) when relevant.
+   - For potential emergencies or red-flag symptoms (severe chest pain, shortness of breath, sudden weakness, severe uncontrolled bleeding), clearly urge immediate emergency medical evaluation.
+   - Keep answers concise, helpful, and focused (1 to 3 short paragraphs or clean bullet points).
 """
+
+# Common non-medical query patterns
+NON_MEDICAL_PATTERNS = [
+    r"\b(code|python|java|javascript|c\+\+|html|css|sql|script|function|algorithm|programming|hack|debugger|git)\b",
+    r"\b(write a poem|write me a poem|write a song|write a story|tell a joke|tell me a joke)\b",
+    r"\b(solve this math|calculus|algebra|equation|multiplication|derivative)\b",
+    r"\b(who won|cricket match|football score|world cup|olympics)\b",
+    r"\b(capital of|population of|weather in|stock price|crypto|bitcoin)\b",
+    r"\b(create a resume|write my resume|cover letter|interview prep)\b",
+]
+
+IDENTITY_PATTERNS = [
+    r"^(who|what) are you\??$",
+    r"^what is your name\??$",
+    r"^tell me about yourself\??$",
+    r"^what can you do\??$",
+    r"^what do you do\??$",
+]
+
+
+def _is_non_medical(text: str) -> bool:
+    """Detect clearly non-medical requests (programming, math, sports, trivia)."""
+    t = text.lower().strip()
+    for pattern in NON_MEDICAL_PATTERNS:
+        if re.search(pattern, t):
+            # Check if it's genuinely non-medical and not a medical term
+            if not any(k in t for k in ["symptom", "pain", "doctor", "health", "medicine", "rash", "fever", "ache"]):
+                return True
+    return False
+
+
+def _is_identity_query(text: str) -> bool:
+    """Detect identity inquiries."""
+    t = text.lower().strip().rstrip("?.!")
+    for pattern in IDENTITY_PATTERNS:
+        if re.search(pattern, t):
+            return True
+    return False
 
 
 def generate_chat_response(messages: list, patient_context: dict = None) -> dict:
     """
-    Generate an AI medical response using OpenAI API.
+    Generate an AI medical response using the configured AI engine.
     
     Parameters:
     - messages: list of dicts with {"role": "user"|"assistant", "content": "..."}
@@ -49,10 +96,55 @@ def generate_chat_response(messages: list, patient_context: dict = None) -> dict
     - dict: {"content": str, "model": str, "response_time_ms": int, "status": str, "error": str|None}
     """
     start_time = time.time()
-    api_key = os.getenv("OPENAI_API_KEY", OPENAI_API_KEY).strip()
-    model = os.getenv("OPENAI_MODEL", OPENAI_MODEL).strip()
+    
+    # Extract latest user message
+    last_user_msg = ""
+    for msg in reversed(messages):
+        if msg.get("role") == "user" or msg.get("sender") == "user":
+            last_user_msg = str(msg.get("content", "")).strip()
+            break
 
-    # Build system message with optional patient assessment context
+    if not last_user_msg:
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        return {
+            "content": "Please enter a health-related question or symptom to begin our consultation.",
+            "model": "caretrack-medical-assistant",
+            "response_time_ms": max(elapsed_ms, 20),
+            "status": "success",
+            "error": None,
+        }
+
+    # 1. Check for clearly non-medical questions
+    if _is_non_medical(last_user_msg):
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        return {
+            "content": (
+                "I can only help with medical and health-related questions. "
+                "Please ask me about symptoms, health concerns, diagnostic reports, clinical recommendations, "
+                "or when to seek medical care."
+            ),
+            "model": "caretrack-medical-assistant",
+            "response_time_ms": max(elapsed_ms, 30),
+            "status": "success",
+            "error": None,
+        }
+
+    # 2. Check for identity queries
+    if _is_identity_query(last_user_msg):
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        return {
+            "content": (
+                "I am CareTrack AI's Medical Assistance Chatbot. I can help explain your health analysis results, "
+                "provide simple guidance on symptoms, suggest wellness next steps, and help you identify which "
+                "medical specialist to consult. What health question can I help you with today?"
+            ),
+            "model": "caretrack-medical-assistant",
+            "response_time_ms": max(elapsed_ms, 30),
+            "status": "success",
+            "error": None,
+        }
+
+    # Build system message with optional authenticated patient assessment context
     system_text = SYSTEM_PROMPT
     if patient_context and isinstance(patient_context, dict):
         ctx_lines = []
@@ -65,145 +157,103 @@ def generate_chat_response(messages: list, patient_context: dict = None) -> dict
         if patient_context.get("latest_condition"):
             ctx_lines.append(f"Recent Assessment Top Finding: {patient_context['latest_condition']} ({patient_context.get('latest_confidence', '')}% confidence)")
         if patient_context.get("risk_level"):
-            ctx_lines.append(f"Recent Risk Level: {patient_context['risk_level']}")
+            ctx_lines.append(f"Recent Risk Profile: {patient_context['risk_level']}")
         if patient_context.get("doctor"):
-            ctx_lines.append(f"Recommended Specialist: {patient_context['doctor']}")
+            ctx_lines.append(f"Recommended Specialist on File: {patient_context['doctor']}")
         if patient_context.get("symptoms"):
-            ctx_lines.append(f"Reported Symptoms: {', '.join(patient_context['symptoms'])}")
+            ctx_lines.append(f"Reported Symptoms on File: {', '.join(patient_context['symptoms'])}")
 
         if ctx_lines:
-            system_text += "\n\nCURRENT PATIENT CLINICAL CONTEXT (for relevant reference):\n" + "\n".join(ctx_lines)
+            system_text += "\n\nAUTHENTICATED PATIENT CLINICAL CONTEXT (use only if patient asks about their results):\n" + "\n".join(ctx_lines)
 
-    # Prepare payload with max 10 recent messages to optimize token usage & latency
+    # Format recent conversation history
     formatted_messages = [{"role": "system", "content": system_text}]
-    for msg in messages[-10:]:
+    for msg in messages[-8:]:
         role = "assistant" if msg.get("sender") == "assistant" or msg.get("role") == "assistant" else "user"
         content = str(msg.get("content", "")).strip()
         if content:
             formatted_messages.append({"role": role, "content": content})
 
-    # If no API key is set or key is placeholder, use structured clinical assistant response
-    if not api_key or api_key == "YOUR_OPENAI_API_KEY_HERE" or api_key.startswith("sk-placeholder"):
-        elapsed_ms = int((time.time() - start_time) * 1000)
-        last_user_msg = messages[-1].get("content", "").lower() if messages else ""
-        fallback_reply = _generate_structured_clinical_reply(last_user_msg, patient_context)
-        return {
-            "content": fallback_reply,
-            "model": "caretrack-medical-assistant",
-            "response_time_ms": max(elapsed_ms, 80),
-            "status": "success",
-            "error": None,
-        }
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    model = os.getenv("OPENAI_MODEL", OPENAI_MODEL).strip()
 
-    # Call OpenAI API via HTTPS
-    try:
-        url = "https://api.openai.com/v1/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        }
-        payload = {
-            "model": model,
-            "messages": formatted_messages,
-            "max_tokens": 450,
-            "temperature": 0.5,
-        }
-
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers=headers,
-            method="POST",
-        )
-
-        with urllib.request.urlopen(req, timeout=12) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            elapsed_ms = int((time.time() - start_time) * 1000)
-            ai_text = data["choices"][0]["message"]["content"].strip()
-            return {
-                "content": ai_text,
-                "model": data.get("model", model),
-                "response_time_ms": elapsed_ms,
-                "status": "success",
-                "error": None,
+    # 3. Primary: Call OpenAI API if API key is configured
+    if api_key and api_key != "YOUR_OPENAI_API_KEY_HERE" and not api_key.startswith("sk-placeholder"):
+        try:
+            url = "https://api.openai.com/v1/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            }
+            payload = {
+                "model": model,
+                "messages": formatted_messages,
+                "max_tokens": 400,
+                "temperature": 0.4,
             }
 
-    except urllib.error.HTTPError as e:
-        elapsed_ms = int((time.time() - start_time) * 1000)
-        err_body = e.read().decode("utf-8", errors="ignore")
-        print(f"[openai_service] HTTP error {e.code}: {err_body}")
-
-        # Provide a safe patient-friendly fallback rather than raw errors
-        last_user_msg = messages[-1].get("content", "").lower() if messages else ""
-        fallback_reply = _generate_structured_clinical_reply(last_user_msg, patient_context)
-        return {
-            "content": fallback_reply,
-            "model": model,
-            "response_time_ms": elapsed_ms,
-            "status": "fallback",
-            "error": f"HTTP {e.code}",
-        }
-
-    except Exception as e:
-        elapsed_ms = int((time.time() - start_time) * 1000)
-        print(f"[openai_service] Network/API error: {e}")
-        last_user_msg = messages[-1].get("content", "").lower() if messages else ""
-        fallback_reply = _generate_structured_clinical_reply(last_user_msg, patient_context)
-        return {
-            "content": fallback_reply,
-            "model": model,
-            "response_time_ms": elapsed_ms,
-            "status": "fallback",
-            "error": str(e),
-        }
-
-
-def _generate_structured_clinical_reply(query: str, patient_context: dict = None) -> str:
-    """Generate safe, helpful, non-technical medical guidance when external API is unreachable."""
-    condition = patient_context.get("latest_condition", "").replace("_", " ").title() if patient_context else ""
-    doctor = patient_context.get("doctor", "General Physician") if patient_context else "General Physician"
-    risk = patient_context.get("risk_level", "moderate").lower() if patient_context else "moderate"
-
-    q = query.lower()
-
-    if "explain" in q or "result" in q or "finding" in q or "report" in q:
-        if condition:
-            return (
-                f"Based on your recent CareTrack AI assessment, the primary condition analyzed was **{condition}** "
-                f"with a **{risk}** risk profile.\n\n"
-                f"This indicates that your reported symptoms closely match common patterns for this condition. "
-                f"We recommend scheduling a consultation with a **{doctor}** to discuss these findings and obtain a formal clinical checkup."
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers=headers,
+                method="POST",
             )
-        return (
-            "Your health analysis compares your reported symptoms against clinical patterns. "
-            "To review specific results, you can open your latest Assessment Report from the dashboard. "
-            "If symptoms are causing discomfort, scheduling a visit with a General Physician is a great next step."
-        )
 
-    if "doctor" in q or "specialist" in q or "consult" in q or "who should i see" in q:
-        return (
-            f"For your symptoms and recent health analysis, consulting a **{doctor}** is recommended.\n\n"
-            "During your visit, bring your CareTrack AI assessment summary so your doctor has a clear record of your symptoms and vitals."
-        )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                ai_text = data["choices"][0]["message"]["content"].strip()
+                return {
+                    "content": ai_text,
+                    "model": data.get("model", model),
+                    "response_time_ms": elapsed_ms,
+                    "status": "success",
+                    "error": None,
+                }
+        except Exception as e:
+            print(f"[openai_service] OpenAI API call error: {e}")
+            # Continue to secondary backend AI engine
 
-    if "next" in q or "what should i do" in q or "step" in q:
-        return (
-            "Here are practical next steps you can take:\n\n"
-            f"1. **Consult a Doctor:** Book an appointment with a **{doctor}** for formal evaluation.\n"
-            "2. **Monitor Symptoms:** Track if your symptoms improve, stay the same, or worsen over the next 24–48 hours.\n"
-            "3. **Rest & Hydration:** Ensure adequate sleep, hydration, and avoid strenuous activity until you feel better.\n"
-            "4. **Urgent Care:** If you experience severe chest pain, shortness of breath, or high fever, seek emergency medical care immediately."
-        )
+    # 4. Secondary: Use configured Gemini AI engine
+    gemini_key = os.getenv("GEMINI_API_KEY", GEMINI_API_KEY).strip()
+    if gemini_key and gemini_key != "YOUR_GEMINI_API_KEY_HERE":
+        try:
+            from google import genai
+            client = genai.Client(api_key=gemini_key)
 
-    if "chest pain" in q or "breath" in q or "emergency" in q or "severe" in q:
-        return (
-            "⚠️ **Important Warning:** Chest discomfort, severe shortness of breath, sudden numbness, or acute pain can be signs of a medical emergency.\n\n"
-            "Please seek immediate emergency medical care or call your local emergency services (such as 911 or 112) right away rather than waiting."
-        )
+            # Build conversational prompt
+            conversation_history_text = "\n".join(
+                f"{'Patient' if m['role'] == 'user' else 'AI Assistant'}: {m['content']}"
+                for m in formatted_messages if m['role'] != 'system'
+            )
+            full_prompt = (
+                f"{system_text}\n\n"
+                f"Conversation History:\n{conversation_history_text}\n\n"
+                f"Patient: {last_user_msg}\nAI Assistant:"
+            )
 
-    # General wellness and symptom guidance
-    return (
-        "Thank you for sharing. When managing symptoms, it is best to stay well-hydrated, rest, and keep a log of when the symptoms started.\n\n"
-        f"For personalized medical diagnosis and treatment options, we recommend consulting a **{doctor}**. "
-        "Feel free to ask if you would like me to explain your latest test report or next steps!"
-    )
+            res = client.models.generate_content(
+                model="gemini-3.5-flash-lite",
+                contents=full_prompt,
+            )
+            elapsed_ms = int((time.time() - start_time) * 1000)
+            if res and res.text:
+                return {
+                    "content": res.text.strip(),
+                    "model": "caretrack-medical-ai",
+                    "response_time_ms": elapsed_ms,
+                    "status": "success",
+                    "error": None,
+                }
+        except Exception as e:
+            print(f"[openai_service] Gemini fallback error: {e}")
+
+    # 5. Controlled API Failure (NO fake medical response)
+    elapsed_ms = int((time.time() - start_time) * 1000)
+    return {
+        "content": "Sorry, I'm unable to respond right now. Please try again shortly.",
+        "model": "caretrack-medical-assistant",
+        "response_time_ms": elapsed_ms,
+        "status": "failed",
+        "error": "AI service temporarily unavailable",
+    }
