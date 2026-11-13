@@ -120,6 +120,7 @@ function resolveRoute(isAdmin: boolean, isPatient: boolean): Page {
     if (hash.includes('contact')) return 'contact'
     if (hash.includes('patient-details') || hash.includes('/patient/details')) return 'patient-details'
     if (hash.includes('symptom-categories')) return 'symptom-categories'
+    if (hash.includes('symptom-subcategory')) return 'symptom-subcategory'
     if (hash.includes('review')) return 'review'
     if (hash.includes('analyzing')) return 'analyzing'
     if (hash.includes('report')) return 'report'
@@ -149,6 +150,7 @@ function resolveRoute(isAdmin: boolean, isPatient: boolean): Page {
   if (hash.includes('contact')) return 'contact'
   if (hash.includes('patient-details') || hash.includes('/patient/details')) return 'patient-details'
   if (hash.includes('symptom-categories')) return 'symptom-categories'
+  if (hash.includes('symptom-subcategory')) return 'symptom-subcategory'
   if (hash.includes('review')) return 'review'
   if (hash.includes('analyzing')) return 'analyzing'
   if (hash.includes('report')) return 'report'
@@ -165,10 +167,31 @@ export default function App() {
   const [adminDetailId, setAdminDetailId] = useState<string | undefined>(undefined)
   const [returnToPage, setReturnToPage] = useState<Page>('home')
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
-  const [patientDetails, setPatientDetails] = useState<PatientDetails>(INITIAL_PATIENT)
-  const [selectedSymptoms, setSelectedSymptoms] = useState<Record<string, SelectedSymptom>>({})
+  const [patientDetails, setPatientDetails] = useState<PatientDetails>(() => {
+    try {
+      const cached = localStorage.getItem('caretrack_patient_details')
+      return cached ? JSON.parse(cached) : INITIAL_PATIENT
+    } catch {
+      return INITIAL_PATIENT
+    }
+  })
+  const [selectedSymptoms, setSelectedSymptoms] = useState<Record<string, SelectedSymptom>>(() => {
+    try {
+      const cached = localStorage.getItem('caretrack_selected_symptoms')
+      return cached ? JSON.parse(cached) : {}
+    } catch {
+      return {}
+    }
+  })
   const [currentCategory, setCurrentCategory] = useState<string | null>(null)
-  const [currentPrediction, setCurrentPrediction] = useState<PredictionResponse | null>(null)
+  const [currentPrediction, setCurrentPrediction] = useState<PredictionResponse | null>(() => {
+    try {
+      const cached = localStorage.getItem('caretrack_latest_prediction')
+      return cached ? JSON.parse(cached) : null
+    } catch {
+      return null
+    }
+  })
 
   // Initialize session on mount + handle URL hash routing with role enforcement
   useEffect(() => {
@@ -177,6 +200,29 @@ export default function App() {
       setIsAuthenticated(auth.isPatient)
       setUser(auth.patientUser)
       const targetPage = resolveRoute(auth.isAdmin, auth.isPatient)
+
+      // Hydrate state from localStorage if available
+      try {
+        const pStr = localStorage.getItem('caretrack_latest_prediction')
+        if (pStr) setCurrentPrediction(JSON.parse(pStr))
+      } catch {}
+      try {
+        const dStr = localStorage.getItem('caretrack_patient_details')
+        if (dStr) setPatientDetails(JSON.parse(dStr))
+      } catch {}
+      try {
+        const sStr = localStorage.getItem('caretrack_selected_symptoms')
+        if (sStr) setSelectedSymptoms(JSON.parse(sStr))
+      } catch {}
+
+      const hash = window.location.hash.toLowerCase()
+      if (hash.includes('category=')) {
+        const match = hash.match(/category=([a-z0-9_-]+)/)
+        if (match && match[1]) {
+          setCurrentCategory(match[1])
+        }
+      }
+
       setPage(targetPage)
     }
 
@@ -288,7 +334,9 @@ export default function App() {
 
   function handleSelectCategory(categoryId: string) {
     setCurrentCategory(categoryId)
-    navigate('symptom-subcategory')
+    window.location.hash = `/symptom-subcategory?category=${categoryId}`
+    setPage('symptom-subcategory')
+    window.scrollTo({ top: 0, behavior: 'instant' })
   }
 
   const showNavbar = !NO_NAVBAR_PAGES.includes(page)
@@ -418,9 +466,9 @@ export default function App() {
               />
             )}
 
-            {page === 'symptom-subcategory' && currentCategory && (
+            {page === 'symptom-subcategory' && (
               <SymptomSubcategoryPage
-                categoryId={currentCategory}
+                categoryId={currentCategory || 'general'}
                 selectedSymptoms={selectedSymptoms}
                 onToggle={toggleSymptom}
                 onNavigate={navigate}
@@ -445,6 +493,9 @@ export default function App() {
                 onNavigate={navigate}
                 onPredictionComplete={(data) => {
                   setCurrentPrediction(data)
+                  try {
+                    localStorage.setItem('caretrack_latest_prediction', JSON.stringify(data))
+                  } catch {}
                   setReturnToPage(isAuthenticated ? 'patient-dashboard' : 'home')
                 }}
               />
