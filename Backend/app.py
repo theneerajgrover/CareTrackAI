@@ -144,6 +144,8 @@ def optional_auth(f):
 # -- Root & Health Check --------------------------------------------------------
 
 @app.route("/", methods=["GET"])
+@app.route("/api", methods=["GET"])
+@app.route("/api/", methods=["GET"])
 def index():
     return jsonify({
         "status": "online",
