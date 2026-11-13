@@ -53,7 +53,6 @@ export default function AnalyzingPage({
     if (hasFiredRef.current) return
     hasFiredRef.current = true
 
-    let isMounted = true
     const symptomKeys = Object.keys(selectedSymptoms)
     const startTime = Date.now()
 
@@ -61,7 +60,7 @@ export default function AnalyzingPage({
 
     // Hard timeout guard
     const hardTimeout = setTimeout(() => {
-      if (isMounted && !hasNavigatedRef.current) {
+      if (!hasNavigatedRef.current) {
         console.warn('[REPORT] REPORT_TIMEOUT after', HARD_TIMEOUT_MS, 'ms')
         setStatus('timed_out')
         setErrorMessage('Report generation is taking longer than expected. Your report may still be processing in the background.')
@@ -79,8 +78,7 @@ export default function AnalyzingPage({
           elapsed_ms: elapsed,
         })
 
-        if (!isMounted || hasNavigatedRef.current) {
-          console.log('[REPORT] Component unmounted before navigation, report saved in DB')
+        if (hasNavigatedRef.current) {
           return
         }
 
@@ -111,7 +109,7 @@ export default function AnalyzingPage({
         const elapsed = Date.now() - startTime
         console.error('[REPORT] REPORT_ERROR', { error: err.message, elapsed_ms: elapsed })
 
-        if (isMounted && !hasNavigatedRef.current) {
+        if (!hasNavigatedRef.current) {
           setStatus('failed')
           setErrorMessage(err.message || 'Failed to analyze symptoms with the backend.')
         }
@@ -121,7 +119,6 @@ export default function AnalyzingPage({
     callApi()
 
     return () => {
-      isMounted = false
       clearTimeout(hardTimeout)
     }
   }, []) // Stable deps only — refs handle latest values

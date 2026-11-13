@@ -192,6 +192,16 @@ export default function App() {
       window.location.hash = `/admin/${sub}`
     } else if (to === 'patient-details') {
       window.location.hash = '/patient-details'
+    } else if (to === 'symptom-categories') {
+      window.location.hash = '/symptom-categories'
+    } else if (to === 'symptom-subcategory') {
+      window.location.hash = '/symptom-subcategory'
+    } else if (to === 'review') {
+      window.location.hash = '/review'
+    } else if (to === 'analyzing') {
+      window.location.hash = '/analyzing'
+    } else if (to === 'report') {
+      window.location.hash = '/report'
     } else if (to.startsWith('patient-')) {
       const sub = to.replace('patient-', '')
       window.location.hash = `/patient/${sub}`
@@ -435,7 +445,7 @@ export default function App() {
                 onNavigate={navigate}
                 onPredictionComplete={(data) => {
                   setCurrentPrediction(data)
-                  setReturnToPage('home')
+                  setReturnToPage(isAuthenticated ? 'patient-dashboard' : 'home')
                 }}
               />
             )}
