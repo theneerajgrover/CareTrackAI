@@ -5,12 +5,12 @@
 
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:090d16,40:1e1b4b,80:0f766e,100:0284c7&height=240&section=header&text=CareTrack%20AI&fontSize=54&fontColor=ffffff&animation=fadeIn&fontAlignY=38&desc=Next-Gen%20Intelligent%20Healthcare%20Diagnostics%20%26%20Clinical%20Triage&descSize=19&descColor=93c5fd&descAlignY=60" alt="CareTrack AI Banner" width="100%" />
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:090d16,40:1e1b4b,80:0f766e,100:0284c7&height=240&section=header&text=CareTrack%20AI&fontSize=54&fontColor=ffffff&animation=fadeIn&fontAlignY=38&desc=Next-Gen%20Intelligent%20Healthcare%20Diagnostics%20and%20Clinical%20Triage&descSize=19&descColor=93c5fd&descAlignY=60" alt="CareTrack AI Banner" width="100%" />
 
 <br/>
 
 <a href="https://git.io/typing-svg">
-  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=20&duration=3000&pause=1200&color=38BDF8&center=true&vCenter=true&width=750&height=42&lines=Precision+Disease+Prediction+via+Gaussian+Naive+Bayes;713+Condition+Classes+%E2%80%A2+377+Clinical+Symptom+Features;Generative+AI+Clinical+Triage+%26+Remedy+Enrichment;Contextual+Medical+Chatbot+Powered+by+OpenAI+%26+Gemini;Full+Patient+Portal+%26+Role-Based+Admin+Control+Center" alt="Typing SVG" />
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=20&duration=3000&pause=1200&color=38BDF8&center=true&vCenter=true&width=750&height=42&lines=Precision+Disease+Prediction+via+Gaussian+Naive+Bayes;713+Condition+Classes+%E2%80%A2+377+Clinical+Symptom+Features;Generative+AI+Clinical+Triage+and+Remedy+Enrichment;Contextual+Medical+Chatbot+Powered+by+OpenAI+and+Gemini;Full+Patient+Portal+and+Role-Based+Admin+Control+Center" alt="Typing SVG" />
 </a>
 
 <p align="center">
@@ -174,16 +174,16 @@ flowchart TD
     end
 
     subgraph APITier["Application Tier (Render Service)"]
-        API["Flask REST API Engine<br/>(app.py & admin_routes.py)"]:::backend
-        AuthService["Auth Manager<br/>(JWT + Bcrypt)"]:::backend
+        API["Flask REST API Engine<br/>(app.py and admin_routes.py)"]:::backend
+        AuthService["Auth Manager<br/>(JWT and Bcrypt)"]:::backend
         ChatService["Medical Chat Engine<br/>(Domain Guardrails)"]:::backend
-        TriageService["Triage & Prediction Handler"]:::backend
+        TriageService["Triage and Prediction Handler"]:::backend
     end
 
     subgraph MLEngine["Machine Learning Engine"]
         Vectorizer["377-Signal Feature Encoder"]:::ml
         GNB["Gaussian Naive Bayes Model<br/>(713 Disease Classes)"]:::ml
-        ProbDist["Probabilistic Output & Rankings"]:::ml
+        ProbDist["Probabilistic Output and Rankings"]:::ml
     end
 
     subgraph GenerativeAI["Generative Clinical Intelligence"]
@@ -198,15 +198,17 @@ flowchart TD
 
     %% Client Interactions
     UI --> Router
-    Router --> Portal & AdminUI
-    Portal & AdminUI -->|"HTTPS / REST API + JWT"| API
+    Router --> Portal
+    Router --> AdminUI
+    Portal -->|"HTTPS / REST API + JWT"| API
+    AdminUI -->|"HTTPS / REST API + JWT"| API
 
     %% Backend Routing
     API --> AuthService
     API --> TriageService
     API --> ChatService
 
-    %% Triage & ML Flow
+    %% Triage and ML Flow
     TriageService --> Vectorizer
     Vectorizer --> GNB
     GNB --> ProbDist
@@ -217,11 +219,14 @@ flowchart TD
     ChatService -->|"Validated Medical Query"| OpenAI
 
     %% Data Persistence Flow
-    AuthService & TriageService & ChatService & API <--> DB
+    AuthService <--> DB
+    TriageService <--> DB
+    ChatService <--> DB
+    API <--> DB
     DB --- Tables
 
     %% Delivery Back
-    TriageService -->|"Structured Diagnosis & Triage JSON"| UI
+    TriageService -->|"Structured Diagnosis and Triage JSON"| UI
 ```
 
 <br/>
