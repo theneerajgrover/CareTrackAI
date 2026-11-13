@@ -118,7 +118,7 @@ function resolveRoute(isAdmin: boolean, isPatient: boolean): Page {
     if (hash.includes('health-analysis')) return 'health-analysis'
     if (hash.includes('about')) return 'about'
     if (hash.includes('contact')) return 'contact'
-    if (hash.includes('patient-details')) return 'patient-details'
+    if (hash.includes('patient-details') || hash.includes('/patient/details')) return 'patient-details'
     if (hash.includes('symptom-categories')) return 'symptom-categories'
     if (hash.includes('review')) return 'review'
     if (hash.includes('analyzing')) return 'analyzing'
@@ -147,7 +147,7 @@ function resolveRoute(isAdmin: boolean, isPatient: boolean): Page {
   if (hash.includes('health-analysis')) return 'health-analysis'
   if (hash.includes('about')) return 'about'
   if (hash.includes('contact')) return 'contact'
-  if (hash.includes('patient-details')) return 'patient-details'
+  if (hash.includes('patient-details') || hash.includes('/patient/details')) return 'patient-details'
   if (hash.includes('symptom-categories')) return 'symptom-categories'
   if (hash.includes('review')) return 'review'
   if (hash.includes('analyzing')) return 'analyzing'
@@ -190,6 +190,8 @@ export default function App() {
     if (to.startsWith('admin-')) {
       const sub = to.replace('admin-', '')
       window.location.hash = `/admin/${sub}`
+    } else if (to === 'patient-details') {
+      window.location.hash = '/patient-details'
     } else if (to.startsWith('patient-')) {
       const sub = to.replace('patient-', '')
       window.location.hash = `/patient/${sub}`
@@ -306,7 +308,7 @@ export default function App() {
             }
           }}
         />
-      ) : page.startsWith('patient-') ? (
+      ) : page.startsWith('patient-') && page !== 'patient-details' ? (
         <PatientApp
           page={page as PatientPage}
           user={user}
@@ -388,7 +390,13 @@ export default function App() {
               <PatientDetailsPage
                 details={patientDetails}
                 onSave={setPatientDetails}
-                onNavigate={navigate}
+                onNavigate={(dest) => {
+                  if (dest === 'home' && returnToPage) {
+                    navigate(returnToPage)
+                  } else {
+                    navigate(dest)
+                  }
+                }}
               />
             )}
 
