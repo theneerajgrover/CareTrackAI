@@ -7,7 +7,11 @@
 
 import type { PatientDetails, PredictionResponse, HistoryItem, User } from '../types'
 
-const API_BASE = (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:5000/api'
+const API_BASE =
+  (import.meta as any).env?.VITE_API_BASE ||
+  ((import.meta as any).env?.PROD
+    ? 'https://caretrack-ai.onrender.com/api'
+    : 'http://127.0.0.1:5000/api')
 
 // Helper for tokens in localStorage
 export function getAccessToken(): string | null {

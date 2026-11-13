@@ -2,19 +2,30 @@
 .DS_Store
 Thumbs.db
 
+# Python & Virtual Environments
 __pycache__/
 *.pyc
-node_modules/
-.env
+.venv/
+venv/
+env/
 
-# Node (agar future me use kare)
+# Dependencies
 node_modules/
 
-# Env files
+# Environment files & Secrets
 .env
+.env.*
+*.env
+
+# Build outputs
+Frontend/dist/
+dist/
+build/
+
+# Large training dump files in root (preserves Backend/Dataset/data.csv)
+/data.csv
+/data.csv.xlsx
+*.xlsx
 
 # Logs
 *.log
-
-.env
-*.env
