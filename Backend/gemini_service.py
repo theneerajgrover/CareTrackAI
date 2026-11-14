@@ -18,9 +18,13 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dotenv import load_dotenv
 
+# Ensure local .env in Backend/ is loaded if present
+_env_path = os.path.join(os.path.dirname(__file__), ".env")
+if os.path.exists(_env_path):
+    load_dotenv(_env_path)
 load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 GEMINI_SECONDARY_MODEL = os.getenv("GEMINI_SECONDARY_MODEL", "gemini-3.6-flash")
 GEMINI_TIMEOUT_SECONDS = float(os.getenv("GEMINI_TIMEOUT_SECONDS", "1.0"))
@@ -31,48 +35,42 @@ _REMEDIES_CACHE = {}
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=4)
 _CLIENT = None
-_CLIENT_INITIALIZING = False
 _CLIENT_LOCK = threading.Lock()
 
 
-def _init_client_sync():
+def _init_client():
     """Initialize the Google GenAI client once in a thread-safe manner."""
-    global _CLIENT, _CLIENT_INITIALIZING
+    global _CLIENT
+    if _CLIENT is not None:
+        return _CLIENT
+
     with _CLIENT_LOCK:
         if _CLIENT is not None:
             return _CLIENT
-        if _CLIENT_INITIALIZING:
-            return None
-        _CLIENT_INITIALIZING = True
 
-    try:
-        if GEMINI_API_KEY and GEMINI_API_KEY != "YOUR_GEMINI_API_KEY_HERE":
-            from google import genai
-            client = genai.Client(api_key=GEMINI_API_KEY)
-            with _CLIENT_LOCK:
-                _CLIENT = client
-            return client
-    except Exception as e:
-        # Never log raw keys or credentials
-        print(f"[gemini_service] Client initialization warning: {type(e).__name__}")
-    finally:
-        with _CLIENT_LOCK:
-            _CLIENT_INITIALIZING = False
+        api_key = os.getenv("GEMINI_API_KEY", GEMINI_API_KEY).strip()
+        if api_key and api_key != "YOUR_GEMINI_API_KEY_HERE":
+            try:
+                from google import genai
+                _CLIENT = genai.Client(api_key=api_key)
+                return _CLIENT
+            except Exception as e:
+                # Never log raw keys or credentials
+                print(f"[gemini_service] Client initialization warning: {type(e).__name__}")
 
     return None
 
 
-# Eager initialization in background pool
-_EXECUTOR.submit(_init_client_sync)
+# Background warm-up
+_EXECUTOR.submit(_init_client)
 
 
 def _get_client():
-    """Get Gemini client if ready, without blocking."""
-    with _CLIENT_LOCK:
-        if _CLIENT is not None:
-            return _CLIENT
-    # Try initializing if not yet done
-    return _init_client_sync()
+    """Get Gemini client if ready, or initialize it."""
+    global _CLIENT
+    if _CLIENT is not None:
+        return _CLIENT
+    return _init_client()
 
 
 # -- Curated Clinical Remedies Library (Instant <0.1ms access) -----------------
