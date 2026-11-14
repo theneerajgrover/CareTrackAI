@@ -1,16 +1,22 @@
 """
 symptom_mapper.py
 -----------------
-Maps the frontend symptom keys (from React symptoms.ts) to the dataset's
-column names. Uses exact matching first, then fuzzy substring matching.
+Maps frontend symptom keys (from React symptoms.ts and user inputs) to
+the dataset's 377 column names.
+
+Supports:
+- Exact 1-to-1 and 1-to-many column mappings
+- Standard clinical synonyms and historical aliases (e.g. itching, nodal_skin_eruptions)
+- Whitespace, hyphen, casing, and punctuation normalization
+- Direct feature column fallback
+- Deduplication of matched and unmatched symptom keys
 """
 
-# --------------------------------------------------------------------------
-# Frontend symptom key  →  dataset column name(s)
-# Built by comparing Frontend/src/data/symptoms.ts keys against the 377
-# columns in data.csv. One frontend key can map to multiple dataset columns.
-# --------------------------------------------------------------------------
+import re
 
+# --------------------------------------------------------------------------
+# Frontend symptom key / alias  →  dataset column name(s)
+# --------------------------------------------------------------------------
 FRONTEND_TO_DATASET = {
     # ── General & Whole Body ──
     "fever": ["fever"],
@@ -161,9 +167,11 @@ FRONTEND_TO_DATASET = {
     "flank_pain": ["side_pain"],
 
     # ── Skin & Hair ──
+    "itching": ["itching_of_skin"],
+    "itching_of_skin": ["itching_of_skin"],
+    "nodal_skin_eruptions": ["skin_lesion"],
     "skin_rash": ["skin_rash"],
     "skin_irritation": ["skin_irritation"],
-    "itching_of_skin": ["itching_of_skin"],
     "skin_dryness": ["skin_dryness_peeling_scaliness_or_roughness"],
     "skin_lesion": ["skin_lesion"],
     "skin_swelling": ["skin_swelling"],
@@ -239,7 +247,73 @@ FRONTEND_TO_DATASET = {
     "bleeding": ["rectal_bleeding"],
     "abscess": ["pus_in_sputum"],
     "swelling": ["peripheral_edema"],
+
+    # ── Clinical & Historical Aliases (Verified against 377 features) ──
+    "continuous_sneezing": ["sneezing"],
+    "shivering": ["chills"],
+    "stomach_pain": ["sharp_abdominal_pain"],
+    "belly_pain": ["sharp_abdominal_pain"],
+    "acidity": ["heartburn"],
+    "ulcers_on_tongue": ["mouth_ulcer"],
+    "burning_micturition": ["painful_urination"],
+    "spotting_urination": ["blood_in_urine"],
+    "cold_hands_and_feets": ["feeling_cold"],
+    "cold_hands_and_feet": ["feeling_cold"],
+    "weight_loss": ["recent_weight_loss"],
+    "lethargy": ["fatigue"],
+    "patches_in_throat": ["throat_irritation"],
+    "high_fever": ["fever"],
+    "mild_fever": ["fever"],
+    "sunken_eyes": ["diminished_vision"],
+    "breathlessness": ["shortness_of_breath"],
+    "yellowish_skin": ["jaundice"],
+    "dark_urine": ["unusual_color_or_odor_to_urine"],
+    "yellow_urine": ["unusual_color_or_odor_to_urine"],
+    "yellowing_of_eyes": ["jaundice"],
+    "loss_of_appetite": ["decreased_appetite"],
+    "pain_behind_the_eyes": ["pain_in_eye"],
+    "diarrhoea": ["diarrhea"],
+    "swelled_lymph_nodes": ["swollen_lymph_nodes"],
+    "blurred_and_distorted_vision": ["diminished_vision"],
+    "phlegm": ["coughing_up_sputum"],
+    "redness_of_eyes": ["eye_redness"],
+    "sinus_pressure": ["sinus_congestion"],
+    "fast_heart_rate": ["increased_heart_rate"],
+    "bloody_stool": ["blood_in_stool"],
+    "swollen_legs": ["peripheral_edema"],
+    "slurred_speech": ["slurring_words"],
+    "hip_joint_pain": ["hip_pain"],
+    "stiff_neck": ["neck_pain"],
+    "swelling_joints": ["joint_swelling"],
+    "movement_stiffness": ["joint_stiffness_or_tightness"],
+    "loss_of_balance": ["dizziness"],
+    "passage_of_gases": ["flatulence"],
+    "abnormal_menstruation": ["unpredictable_menstruation"],
+    "watering_from_eyes": ["lacrimation"],
+    "increased_appetite": ["excessive_appetite"],
+    "lack_of_concentration": ["disturbance_of_memory"],
+    "blood_in_sputum": ["hemoptysis"],
+    "pus_filled_pimples": ["acne_or_pimples"],
+    "blackheads": ["acne_or_pimples"],
+    "blister": ["skin_lesion"],
 }
+
+
+def normalize_symptom_key(key: str) -> str:
+    """
+    Normalize a raw symptom string into a canonical snake_case lookup key.
+    Handles spaces, hyphens, uppercase characters, and punctuation.
+    """
+    if not isinstance(key, str):
+        key = str(key)
+    # Strip whitespace, lower case, replace hyphens and spaces with underscores
+    s = key.strip().lower()
+    s = re.sub(r"[\s\-]+", "_", s)
+    # Remove any characters that are not alphanumeric or underscore
+    s = re.sub(r"[^\w]", "", s)
+    # Collapse multiple consecutive underscores
+    s = re.sub(r"_+", "_", s)
+    return s.strip("_")
 
 
 def map_frontend_symptoms_to_features(symptom_keys: list, feature_columns: list) -> dict:
@@ -250,44 +324,71 @@ def map_frontend_symptoms_to_features(symptom_keys: list, feature_columns: list)
     Parameters
     ----------
     symptom_keys : list[str]
-        Symptom keys from the frontend (e.g. ["fever", "cough", "headache"]).
+        Symptom keys from the frontend (e.g. ["itching", "skin_rash", "nodal_skin_eruptions"]).
     feature_columns : list[str]
-        The exact column names the model was trained on.
+        The exact 377 column names the model was trained on.
 
     Returns
     -------
-    dict  {"features": {col: 0/1, ...}, "matched": [...], "unmatched": [...]}
+    dict
+        {
+            "features": {col: 0/1, ...},
+            "matched": list of successfully matched original keys (deduplicated),
+            "unmatched": list of unmatched keys (deduplicated),
+        }
     """
+    feature_set = set(feature_columns)
     features = {col: 0 for col in feature_columns}
     matched = []
     unmatched = []
+    seen = set()
 
-    for key in symptom_keys:
-        key_lower = key.strip().lower()
-        dataset_cols = FRONTEND_TO_DATASET.get(key_lower, [])
+    if not symptom_keys or not isinstance(symptom_keys, (list, tuple)):
+        return {
+            "features": features,
+            "matched": [],
+            "unmatched": [],
+        }
 
+    for raw_key in symptom_keys:
+        if raw_key is None:
+            continue
+        raw_key_str = str(raw_key).strip()
+        if not raw_key_str:
+            continue
+
+        clean_key = normalize_symptom_key(raw_key_str)
+        if clean_key in seen:
+            continue
+        seen.add(clean_key)
+
+        found = False
+
+        # 1. Lookup in semantic dictionary
+        dataset_cols = FRONTEND_TO_DATASET.get(clean_key)
         if dataset_cols:
-            found_any = False
             for col in dataset_cols:
-                if col in features:
+                if col in feature_set:
                     features[col] = 1
-                    found_any = True
-            if found_any:
-                matched.append(key_lower)
-            else:
-                # Try direct match as fallback
-                if key_lower in features:
-                    features[key_lower] = 1
-                    matched.append(key_lower)
-                else:
-                    unmatched.append(key_lower)
+                    found = True
+
+        # 2. Direct match in model feature columns
+        if not found and clean_key in feature_set:
+            features[clean_key] = 1
+            found = True
+
+        # 3. Fuzzy match: check if clean_key matches any feature column directly
+        if not found:
+            for col in feature_columns:
+                if clean_key == col or (len(clean_key) > 4 and clean_key in col):
+                    features[col] = 1
+                    found = True
+                    break
+
+        if found:
+            matched.append(raw_key_str)
         else:
-            # Direct column name match fallback
-            if key_lower in features:
-                features[key_lower] = 1
-                matched.append(key_lower)
-            else:
-                unmatched.append(key_lower)
+            unmatched.append(raw_key_str)
 
     return {
         "features": features,

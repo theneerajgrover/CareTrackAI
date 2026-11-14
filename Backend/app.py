@@ -522,7 +522,9 @@ def predict():
                 "risk_level": p.get("risk_level"),
                 "doctor": p.get("doctor", "General Physician"),
                 "remedies": p.get("remedies_text"),
+                "remedies_text": p.get("remedies_text"),
                 "warning": p.get("warning_text"),
+                "warning_text": p.get("warning_text"),
             }
             for p in enriched_predictions
         ],
@@ -534,6 +536,7 @@ def predict():
             "accuracy": model_info_data.get("accuracy"),
             "f1_score": model_info_data.get("f1_score"),
         },
+        "disclaimer": "CareTrack AI predictions are for clinical decision support and health guidance only and do not constitute an official medical diagnosis. Always consult a licensed healthcare professional for clinical evaluation and treatment.",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }), 200
 
@@ -712,7 +715,9 @@ def guest_predict():
                 "risk_level": p.get("risk_level"),
                 "doctor": p.get("doctor", "General Physician"),
                 "remedies": p.get("remedies_text"),
+                "remedies_text": p.get("remedies_text"),
                 "warning": p.get("warning_text"),
+                "warning_text": p.get("warning_text"),
             }
             for p in enriched_predictions
         ],
@@ -724,6 +729,7 @@ def guest_predict():
             "accuracy": model_info_data.get("accuracy"),
             "f1_score": model_info_data.get("f1_score"),
         },
+        "disclaimer": "CareTrack AI predictions are for clinical decision support and health guidance only and do not constitute an official medical diagnosis. Always consult a licensed healthcare professional for clinical evaluation and treatment.",
         "guest_used": True,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }), 200

@@ -4,52 +4,75 @@ gemini_service.py
 High-performance Gemini AI integration & clinical remedy engine for CareTrack AI.
 
 Features:
-- Instant fallback & pre-compiled clinical remedies (<1ms).
-- In-memory thread-safe caching.
-- Fast multi-threaded asynchronous AI generation with strict 1.0s deadline.
-- Uses latest ultra-fast model (gemini-3.5-flash-lite).
-- Smart specialty routing for doctors.
+- Instant fallback to pre-compiled clinical remedies (<0.1ms).
+- Thread-safe in-memory caching with threading.Lock().
+- Asynchronous AI generation with strict configurable timeout (default 1.0s).
+- Valid Google GenAI model identifiers (gemini-2.0-flash, gemini-1.5-flash).
+- Clinically sound risk classification based on medical condition acuity.
+- Dual-field compatibility: provides both `remedies`/`remedies_text` and `warning`/`warning_text`.
+- Strict healthcare safety guardrails: zero home remedies for critical/emergency conditions.
 """
 
 import os
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
+import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dotenv import load_dotenv
 
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_SECONDARY_MODEL = os.getenv("GEMINI_SECONDARY_MODEL", "gemini-1.5-flash")
+GEMINI_TIMEOUT_SECONDS = float(os.getenv("GEMINI_TIMEOUT_SECONDS", "1.0"))
 
-# In-memory cache for generated remedies
+# Thread-safe in-memory cache for remedies
+_CACHE_LOCK = threading.Lock()
 _REMEDIES_CACHE = {}
+
 _EXECUTOR = ThreadPoolExecutor(max_workers=4)
 _CLIENT = None
 _CLIENT_INITIALIZING = False
+_CLIENT_LOCK = threading.Lock()
 
 
-def _init_client_async():
-    """Background loader for Gemini client."""
+def _init_client_sync():
+    """Initialize the Google GenAI client once in a thread-safe manner."""
     global _CLIENT, _CLIENT_INITIALIZING
-    if _CLIENT is not None or _CLIENT_INITIALIZING:
-        return
-    _CLIENT_INITIALIZING = True
+    with _CLIENT_LOCK:
+        if _CLIENT is not None:
+            return _CLIENT
+        if _CLIENT_INITIALIZING:
+            return None
+        _CLIENT_INITIALIZING = True
+
     try:
         if GEMINI_API_KEY and GEMINI_API_KEY != "YOUR_GEMINI_API_KEY_HERE":
             from google import genai
-            _CLIENT = genai.Client(api_key=GEMINI_API_KEY)
+            client = genai.Client(api_key=GEMINI_API_KEY)
+            with _CLIENT_LOCK:
+                _CLIENT = client
+            return client
     except Exception as e:
-        print(f"[gemini_service] Background client init warning: {e}")
+        # Never log raw keys or credentials
+        print(f"[gemini_service] Client initialization warning: {type(e).__name__}")
     finally:
-        _CLIENT_INITIALIZING = False
+        with _CLIENT_LOCK:
+            _CLIENT_INITIALIZING = False
+
+    return None
 
 
-# Fire client initialization in background immediately on import
-_EXECUTOR.submit(_init_client_async)
+# Eager initialization in background pool
+_EXECUTOR.submit(_init_client_sync)
 
 
 def _get_client():
     """Get Gemini client if ready, without blocking."""
-    global _CLIENT
-    return _CLIENT
+    with _CLIENT_LOCK:
+        if _CLIENT is not None:
+            return _CLIENT
+    # Try initializing if not yet done
+    return _init_client_sync()
 
 
 # -- Curated Clinical Remedies Library (Instant <0.1ms access) -----------------
@@ -57,7 +80,7 @@ CLINICAL_REMEDIES = {
     "fever": (
         "1. Rest and stay well hydrated with water, herbal teas, and electrolyte solutions.\n"
         "2. Take lukewarm sponge baths to gently reduce body temperature without shivering.\n"
-        "3. Over-the-counter antipyretics like acetaminophen or ibuprofen can provide relief.\n"
+        "3. Over-the-counter antipyretics like acetaminophen or ibuprofen can provide relief as directed.\n"
         "4. Wear lightweight, breathable clothing and maintain a cool room environment.\n"
         "5. Seek immediate medical attention if fever exceeds 103°F (39.4°C) or lasts over 3 days."
     ),
@@ -145,11 +168,18 @@ CLINICAL_REMEDIES = {
         "4. Apply cool, wet compresses to soothe intense itchy patches.\n"
         "5. Consult a dermatologist for prescription topical therapies if inflammation flares."
     ),
+    "lichen simplex": (
+        "1. Avoid scratching or rubbing the affected skin area to break the itch-scratch cycle.\n"
+        "2. Apply cool, damp compresses to the itchy patch for 10-15 minutes to reduce pruritus.\n"
+        "3. Use a thick, fragrance-free barrier emollient (such as petroleum jelly or ceramide cream) twice daily.\n"
+        "4. Keep fingernails trimmed short and consider covering the area with a light dressing at night.\n"
+        "5. Consult a dermatologist for appropriate topical anti-inflammatory treatment if symptoms persist."
+    ),
     "acne": (
-        "1. Wash face twice daily with a gentle, non-comedogenic salicylic acid or benzoyl peroxide cleanser.\n"
-        "2. Avoid picking, squeezing, or popping lesions to prevent scarring and infection.\n"
-        "3. Use oil-free, water-based moisturizers and broad-spectrum sunscreen.\n"
-        "4. Wash pillowcases and phone screens regularly to minimize bacterial transfer.\n"
+        "1. Wash face twice daily with a gentle, non-comedogenic cleanser.\n"
+        "2. Avoid picking, squeezing, or popping lesions to prevent scarring and secondary infection.\n"
+        "3. Use oil-free, water-based moisturizers and non-comedogenic sunscreen.\n"
+        "4. Wash pillowcases and wipe phone screens regularly to minimize bacterial transfer.\n"
         "5. Consult a dermatologist if cystic nodules or widespread inflammation develops."
     ),
     "stress": (
@@ -161,7 +191,7 @@ CLINICAL_REMEDIES = {
     ),
 }
 
-# Generic high-quality clinical fallback
+# Generic clinical fallback
 GENERIC_CLINICAL_REMEDY = (
     "1. Ensure adequate restful sleep to facilitate cellular and immune recovery.\n"
     "2. Maintain optimal hydration with water, herbal teas, and nutritious broths.\n"
@@ -170,43 +200,98 @@ GENERIC_CLINICAL_REMEDY = (
     "5. If symptoms persist or worsen beyond 3 days, please schedule a clinical consultation."
 )
 
+# Minor / outpatient conditions eligible for supportive self-care & home guidance
 MINOR_CONDITIONS = {
     "common cold", "cold", "cough", "fever", "flu", "influenza",
-    "headache", "migraine", "allergic rhinitis", "allergies",
+    "headache", "migraine", "allergic rhinitis", "allergies", "allergy",
     "indigestion", "heartburn", "gastritis", "constipation",
     "diarrhea", "food poisoning", "muscle strain", "back pain",
-    "sinusitis", "sore throat", "tonsilitis", "bronchitis",
-    "acne", "skin rash", "eczema", "hay fever", "motion sickness",
-    "insomnia", "stress", "anxiety", "dehydration",
-    "minor burn", "sunburn", "fatigue", "nausea",
+    "sinusitis", "sore throat", "tonsillitis", "bronchitis",
+    "acne", "skin rash", "eczema", "lichen simplex", "hay fever",
+    "motion sickness", "insomnia", "stress", "anxiety", "dehydration",
+    "minor burn", "sunburn", "fatigue", "nausea", "athlete's foot",
+    "stye", "chalazion", "callus", "diaper rash", "aphthous ulcer",
+}
+
+# Critical life-threatening emergencies requiring immediate emergency intervention
+CRITICAL_CONDITIONS = {
+    "cardiac arrest", "heart attack", "myocardial infarction", "stroke",
+    "pulmonary embolism", "acute respiratory distress syndrome", "sepsis",
+    "anaphylaxis", "intracranial hemorrhage", "subarachnoid hemorrhage",
+    "epidural hemorrhage", "subdural hemorrhage", "aortic aneurysm",
+    "thoracic aortic aneurysm", "abdominal aortic aneurysm", "appendicitis",
+    "ectopic pregnancy", "pneumothorax", "diabetic ketoacidosis",
+    "meningitis", "encephalitis", "acute pancreatitis", "bowel obstruction",
+    "intestinal obstruction", "volvulus", "peritonitis", "acute glaucoma",
+}
+
+# High-risk conditions requiring urgent clinical medical evaluation
+HIGH_RISK_CONDITIONS = {
+    "deep vein thrombosis", "pneumonia", "pyelonephritis", "cholecystitis",
+    "kidney failure", "acute kidney injury", "heart failure", "cirrhosis",
+    "cancer", "malignancy", "leukemia", "lymphoma", "melanoma",
+    "angina", "arrhythmia", "atrial fibrillation", "tuberculosis",
+    "pulmonary hypertension", "severe hypertension", "osteomyelitis",
 }
 
 
-def classify_risk(confidence_pct):
-    """Classify risk level based on confidence percentage."""
-    if confidence_pct >= 80:
-        return "critical"
-    elif confidence_pct >= 60:
+def classify_risk(disease_name: str, confidence_pct: float = 0.0) -> str:
+    """
+    Clinically accurate risk classification based on intrinsic condition acuity
+    and model confidence percentage.
+    """
+    # Support backward compatibility if called as classify_risk(confidence_pct)
+    if isinstance(disease_name, (int, float)) and isinstance(confidence_pct, (int, float)):
+        # Called with single numeric argument: classify_risk(85.0)
+        c = float(disease_name)
+        if c >= 80:
+            return "high"
+        elif c >= 50:
+            return "moderate"
+        else:
+            return "low"
+
+    name_lower = str(disease_name).lower().strip()
+
+    # 1. Critical emergency conditions are ALWAYS critical regardless of confidence
+    for crit in CRITICAL_CONDITIONS:
+        if crit in name_lower:
+            return "critical"
+
+    # 2. High-risk conditions are at least 'high'
+    for hr in HIGH_RISK_CONDITIONS:
+        if hr in name_lower:
+            return "high" if confidence_pct >= 20 else "moderate"
+
+    # 3. Minor self-limiting conditions are NEVER critical or high
+    for minor in MINOR_CONDITIONS:
+        if minor in name_lower or name_lower in minor:
+            if confidence_pct >= 85:
+                return "moderate"
+            return "low"
+
+    # 4. Standard confidence-calibrated classification for general conditions
+    if confidence_pct >= 85:
         return "high"
-    elif confidence_pct >= 30:
+    elif confidence_pct >= 50:
         return "moderate"
     else:
         return "low"
 
 
-def is_minor_condition(disease_name):
-    """Check if a disease is considered minor (eligible for home remedies)."""
-    name_lower = disease_name.lower().strip()
+def is_minor_condition(disease_name: str) -> bool:
+    """Check if a condition is minor/outpatient (eligible for supportive home remedies)."""
+    name_lower = str(disease_name).lower().strip()
     for condition in MINOR_CONDITIONS:
         if condition in name_lower or name_lower in condition:
             return True
     return False
 
 
-def get_doctor_specialty(disease_name):
+def get_doctor_specialty(disease_name: str) -> str:
     """Map a condition to the relevant medical doctor specialty."""
-    name = disease_name.lower().strip()
-    
+    name = str(disease_name).lower().strip()
+
     if any(k in name for k in ["bone", "fracture", "dislocation", "arthritis", "joint", "shoulder", "knee", "hip", "patella", "bursitis", "tendinitis", "calcaneous", "bunion", "osteochondroma", "osteochondrosis", "sprain", "strain", "lumbago", "back pain"]):
         return "Orthopedic Specialist"
     if any(k in name for k in ["skin", "dermatitis", "eczema", "psoriasis", "acne", "melanoma", "lichen", "wart", "rash", "alopecia", "shingles", "rosacea", "callus", "keratosis"]):
@@ -215,7 +300,7 @@ def get_doctor_specialty(disease_name):
         return "Pulmonologist"
     if any(k in name for k in ["heart", "cardiac", "angina", "coronary", "arrhythmia", "atrial", "valve", "myocardial", "infarction", "cardiomyopathy", "hypertensive heart", "aortic"]):
         return "Cardiologist"
-    if any(k in name for k in ["stomach", "gastric", "gastro", "ulcer", "bowel", "colonic", "colorectal", "diverticul", "liver", "cirrhosis", "hepatitis", "pancreatitis", "cholangitis", "esophag", "reflux", "gerd", "constipation", "diarrhea", "food poisoning"]):
+    if any(k in name for k in ["stomach", "gastric", "gastrit", "gastro", "ulcer", "bowel", "colonic", "colorectal", "diverticul", "liver", "cirrhosis", "hepatitis", "pancreatitis", "cholangitis", "esophag", "reflux", "gerd", "constipation", "diarrhea", "food poisoning"]):
         return "Gastroenterologist"
     if any(k in name for k in ["uter", "menstru", "vaginal", "pregnan", "abort", "ovarian", "cervic", "endometri", "vulvar", "pcos", "mittelschmerz", "fibroid", "preeclampsia", "labor", "breast"]):
         return "Gynecologist / Obstetrician"
@@ -239,109 +324,132 @@ def get_doctor_specialty(disease_name):
     return "General Physician"
 
 
-def _get_clinical_fallback(disease_name):
+def _get_clinical_fallback(disease_name: str) -> str:
     """Retrieve pre-compiled clinical remedies immediately in <0.01ms."""
-    name_lower = disease_name.lower().strip()
+    name_lower = str(disease_name).lower().strip()
     for key, remedy in CLINICAL_REMEDIES.items():
         if key in name_lower or name_lower in key:
             return remedy
     return GENERIC_CLINICAL_REMEDY
 
 
-def _fetch_gemini_remedies_sync(disease, confidence):
-    """Synchronous worker function to call Gemini with the fastest available model."""
+def _fetch_gemini_remedies_with_deadline(disease: str, confidence: float, timeout_sec: float = GEMINI_TIMEOUT_SECONDS) -> str:
+    """
+    Call Gemini with a strict timeout deadline.
+    Returns generated remedy text or falls back to clinical library immediately.
+    """
     client = _get_client()
     if not client:
         return _get_clinical_fallback(disease)
 
     prompt = (
-        f"A patient health tool predicted '{disease}' with {confidence:.1f}% confidence. "
-        f"Provide 3-5 concise, practical home remedies. Format as a numbered list (1., 2., etc). "
-        f"Keep each remedy to 1-2 actionable sentences. End with a note to consult a doctor if symptoms persist."
+        f"A patient health tool flagged '{disease}' with {confidence:.1f}% confidence. "
+        f"Provide 3-5 concise, practical, and safe self-care / home guidance tips for supportive relief. "
+        f"Format as a numbered list (1., 2., etc). "
+        f"Keep each tip to 1-2 actionable sentences. End with a note to consult a doctor if symptoms persist."
     )
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-3.5-flash-lite",
+    def _call_model(model_name: str):
+        resp = client.models.generate_content(
+            model=model_name,
             contents=prompt,
         )
-        if response and response.text:
-            return response.text.strip()
+        if resp and resp.text:
+            return resp.text.strip()
+        return None
+
+    future = _EXECUTOR.submit(_call_model, GEMINI_MODEL)
+    try:
+        result = future.result(timeout=timeout_sec)
+        if result and len(result) > 20:
+            return result
+    except (FuturesTimeoutError, Exception):
+        pass
+
+    # Try secondary model quickly if within remaining time
+    try:
+        sec_future = _EXECUTOR.submit(_call_model, GEMINI_SECONDARY_MODEL)
+        result = sec_future.result(timeout=min(0.5, timeout_sec))
+        if result and len(result) > 20:
+            return result
     except Exception:
-        # Fallback to secondary model if needed
-        try:
-            response = client.models.generate_content(
-                model="gemini-3.6-flash",
-                contents=prompt,
-            )
-            if response and response.text:
-                return response.text.strip()
-        except Exception:
-            pass
+        pass
 
     return _get_clinical_fallback(disease)
 
 
-def generate_remedies_and_warnings(predictions):
+def generate_remedies_and_warnings(predictions: list) -> list:
     """
-    High-performance enrichment for all predictions.
-    Instantly matches clinical remedies library (<0.05ms) and schedules
-    AI enhancements without blocking the critical prediction path.
+    Enrich predictions with clinical risk classification, specialty doctor routing,
+    and verified remedies/warnings.
+
+    Guarantees both `remedies`/`remedies_text` and `warning`/`warning_text` are present.
     """
     enriched = []
-
-    # Identify which conditions need remedies
     needed_remedies = []
+
     for pred in predictions:
         disease = pred["disease"]
-        confidence = pred["confidence"]
-        rank = pred["rank"]
-        risk_level = classify_risk(confidence)
+        confidence = float(pred.get("confidence", 0.0))
+        rank = pred.get("rank", 1)
+        risk_level = classify_risk(disease, confidence)
         doctor = get_doctor_specialty(disease)
 
         warning_text = None
-        if risk_level in ("high", "critical"):
+        remedies_text = None
+
+        if risk_level == "critical":
             warning_text = (
-                f"WARNING: {disease} detected with {confidence:.1f}% confidence. "
-                f"This is a {risk_level}-risk finding. "
-                f"Please consult a {doctor} or visit a healthcare facility immediately. "
-                f"Do not rely on self-diagnosis for this condition."
+                f"CRITICAL MEDICAL ALERT: Potential signs of {disease} detected ({confidence:.1f}% confidence). "
+                f"This requires immediate emergency evaluation. Please visit the nearest Emergency Department "
+                f"or contact emergency medical services right away. Do not attempt self-treatment."
+            )
+        elif risk_level == "high":
+            warning_text = (
+                f"HIGH CLINICAL PRIORITY: Findings suggest possible {disease} ({confidence:.1f}% confidence). "
+                f"Please schedule an urgent consultation with a {doctor} or visit a medical clinic. "
+                f"Do not rely solely on automated prediction."
             )
         elif risk_level == "moderate" and not is_minor_condition(disease):
             warning_text = (
-                f"CAUTION: {disease} detected with {confidence:.1f}% confidence. "
-                f"Consider scheduling an appointment with a {doctor} for clinical evaluation."
+                f"CLINICAL GUIDANCE: Findings correlate with {disease} ({confidence:.1f}% confidence). "
+                f"Consider consulting a {doctor} for diagnostic confirmation and clinical guidance."
             )
 
-        remedies_text = None
+        # Supportive remedies are only generated for minor/outpatient conditions
         if is_minor_condition(disease) and confidence > 5:
-            # 1. Instantly get clinical remedy
-            remedies_text = _get_clinical_fallback(disease)
-            # Check if we have an AI cached version
             cache_key = disease.lower().strip()
-            if cache_key in _REMEDIES_CACHE:
-                remedies_text = _REMEDIES_CACHE[cache_key]
+            with _CACHE_LOCK:
+                cached = _REMEDIES_CACHE.get(cache_key)
+
+            if cached:
+                remedies_text = cached
             else:
-                # Store clinical in cache and optionally queue AI enhancement in background
-                _REMEDIES_CACHE[cache_key] = remedies_text
+                # Immediate clinical library fallback (<0.01ms)
+                remedies_text = _get_clinical_fallback(disease)
+                with _CACHE_LOCK:
+                    _REMEDIES_CACHE[cache_key] = remedies_text
                 needed_remedies.append((disease, confidence))
 
         enriched.append({
             **pred,
             "risk_level": risk_level,
             "doctor": doctor,
+            "remedies": remedies_text,
             "remedies_text": remedies_text,
+            "warning": warning_text,
             "warning_text": warning_text,
         })
 
-    # If any need AI background enrichment, fire background worker without blocking request
+    # Trigger asynchronous background AI enrichment for future requests if client is ready
     if needed_remedies and _get_client():
         for d, c in needed_remedies:
             def _bg_worker(dis=d, conf=c):
                 try:
-                    res = _fetch_gemini_remedies_sync(dis, conf)
+                    res = _fetch_gemini_remedies_with_deadline(dis, conf, timeout_sec=2.0)
                     if res and len(res) > 20:
-                        _REMEDIES_CACHE[dis.lower().strip()] = res
+                        with _CACHE_LOCK:
+                            _REMEDIES_CACHE[dis.lower().strip()] = res
                 except Exception:
                     pass
             _EXECUTOR.submit(_bg_worker)

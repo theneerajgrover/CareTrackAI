@@ -2,6 +2,7 @@
 database.py
 -----------
 PostgreSQL connection pool and helper functions for CareTrack AI.
+Supports discrete DB environment variables or a unified DATABASE_URL (e.g. Supabase, Render).
 """
 
 import os
@@ -16,12 +17,19 @@ _pool = None
 
 
 def _get_dsn():
-    """Build DSN from individual env vars or DATABASE_URL."""
+    """Build connection parameters from DATABASE_URL or individual environment variables."""
+    db_url = os.getenv("DATABASE_URL", "").strip()
+    if db_url:
+        # Standardize prefix for psycopg2 compatibility
+        if db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql://", 1)
+        return {"dsn": db_url}
+
     return {
         "host": os.getenv("DB_HOST", "localhost"),
         "port": os.getenv("DB_PORT", "5432"),
         "user": os.getenv("DB_USER", "postgres"),
-        "password": os.getenv("DB_PASSWORD", "Neeraj@0069"),
+        "password": os.getenv("DB_PASSWORD", ""),
         "dbname": os.getenv("DB_NAME", "caretrack_ai"),
     }
 
@@ -30,7 +38,8 @@ def get_pool():
     """Get or create the connection pool."""
     global _pool
     if _pool is None or _pool.closed:
-        _pool = pool.ThreadedConnectionPool(1, 10, **_get_dsn())
+        dsn_params = _get_dsn()
+        _pool = pool.ThreadedConnectionPool(1, 10, **dsn_params)
     return _pool
 
 
