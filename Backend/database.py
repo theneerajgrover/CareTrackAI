@@ -10,6 +10,10 @@ import psycopg2
 from psycopg2 import pool, extras
 from dotenv import load_dotenv
 
+# Ensure local .env in Backend/ is loaded if present
+_env_path = os.path.join(os.path.dirname(__file__), ".env")
+if os.path.exists(_env_path):
+    load_dotenv(_env_path)
 load_dotenv()
 
 # -- Connection Pool -----------------------------------------------------------
@@ -17,7 +21,17 @@ _pool = None
 
 
 def _get_dsn():
-    """Build connection parameters from DATABASE_URL or individual environment variables."""
+    """Build connection parameters from discrete environment variables or DATABASE_URL."""
+    # Discrete variables avoid URL-encoding issues with passwords containing '@' or special chars
+    if os.getenv("DB_HOST") and os.getenv("DB_PASSWORD"):
+        return {
+            "host": os.getenv("DB_HOST", "localhost"),
+            "port": os.getenv("DB_PORT", "5432"),
+            "user": os.getenv("DB_USER", "postgres"),
+            "password": os.getenv("DB_PASSWORD", ""),
+            "dbname": os.getenv("DB_NAME", "caretrack_ai"),
+        }
+
     db_url = os.getenv("DATABASE_URL", "").strip()
     if db_url:
         # Standardize prefix for psycopg2 compatibility

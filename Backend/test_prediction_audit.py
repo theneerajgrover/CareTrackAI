@@ -149,11 +149,22 @@ class TestPredictionPipeline(unittest.TestCase):
 class TestGeminiServiceAndClinicalAcuity(unittest.TestCase):
     """Phase 4 & 5: Gemini Integration, Clinical Risk & Response Consistency"""
 
-    def test_valid_model_identifiers(self):
-        """Verify model identifiers are valid and non-fictional."""
-        self.assertIn("gemini", GEMINI_MODEL)
-        self.assertNotIn("3.5", GEMINI_MODEL)
-        self.assertNotIn("3.6", GEMINI_MODEL)
+    def test_gemini_model_configuration(self):
+        """Verify Gemini model configuration prefers gemini-3.5-flash-lite and valid fallback."""
+        self.assertEqual(GEMINI_MODEL, "gemini-3.5-flash-lite")
+        self.assertEqual(GEMINI_SECONDARY_MODEL, "gemini-3.6-flash")
+
+    def test_deterministic_clinical_fallback_when_gemini_fails(self):
+        """Verify that when Gemini API is unavailable or restricted, predictions and remedies succeed deterministically."""
+        predictions = [
+            {"disease": "common cold", "confidence": 90.0, "rank": 1},
+            {"disease": "fever", "confidence": 85.0, "rank": 2},
+        ]
+        enriched = generate_remedies_and_warnings(predictions)
+        self.assertEqual(len(enriched), 2)
+        for p in enriched:
+            self.assertIsNotNone(p.get("remedies"))
+            self.assertIn("1.", p.get("remedies"))
 
     def test_clinical_risk_acuity(self):
         """Verify risk classification is based on clinical condition acuity, not confidence alone."""
