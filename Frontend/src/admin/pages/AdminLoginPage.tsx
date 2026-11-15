@@ -26,7 +26,7 @@ export default function AdminLoginPage({ onLogin }: AdminLoginPageProps) {
     setLoading(true)
     try {
       const res = await adminLogin(email.trim(), password)
-      onLogin(res.admin_user || (res as any).admin)
+      onLogin(res.admin)
     } catch (err: any) {
       setError(err.message || 'Login failed')
     } finally {
