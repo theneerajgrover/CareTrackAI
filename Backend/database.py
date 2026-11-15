@@ -252,3 +252,28 @@ def execute_returning(sql, params=None):
         raise e
     finally:
         put_conn(conn, close=is_broken)
+
+
+def execute_transaction(operations):
+    """
+    Execute a sequence of (sql, params) statements atomically within a single transaction.
+    Rolls back completely if any statement fails.
+    """
+    conn = get_conn()
+    is_broken = False
+    try:
+        with conn.cursor() as cur:
+            for sql, params in operations:
+                cur.execute(sql, params)
+            conn.commit()
+    except Exception as e:
+        is_broken = _is_connection_error(e) or getattr(conn, "closed", 0) != 0
+        if not is_broken:
+            try:
+                conn.rollback()
+            except Exception:
+                is_broken = True
+        logger.error("Database transaction error: %s", _sanitize_error(e))
+        raise e
+    finally:
+        put_conn(conn, close=is_broken)

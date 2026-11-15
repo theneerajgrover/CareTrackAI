@@ -48,9 +48,14 @@ async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
+  const method = (options.method || 'GET').toUpperCase()
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
+  }
+
+  // Only set Content-Type when sending a body to avoid triggering unnecessary CORS preflight OPTIONS requests on GET
+  if (method !== 'GET' && method !== 'HEAD' && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json'
   }
 
   const token = getAccessToken()
@@ -176,13 +181,22 @@ export async function logout(): Promise<void> {
 
 // ── ML Prediction APIs ─────────────────────────────────────────────────────────
 
+let _inMemoryGuestId: string | null = null
+
 export function getGuestId(): string {
-  let gid = localStorage.getItem('caretrack_guest_id')
-  if (!gid) {
-    gid = 'guest_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
-    localStorage.setItem('caretrack_guest_id', gid)
+  try {
+    let gid = localStorage.getItem('caretrack_guest_id')
+    if (!gid) {
+      gid = 'guest_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+      localStorage.setItem('caretrack_guest_id', gid)
+    }
+    return gid
+  } catch {
+    if (!_inMemoryGuestId) {
+      _inMemoryGuestId = 'guest_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+    }
+    return _inMemoryGuestId
   }
-  return gid
 }
 
 export async function getGuestStatus(): Promise<{ used: boolean; remaining: number; message?: string }> {

@@ -29,7 +29,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 
 from predict import predict_disease, get_model_info, get_available_symptoms, _load_model
-from database import query, execute, execute_returning
+from database import query, execute, execute_returning, execute_transaction
 from gemini_service import generate_remedies_and_warnings, classify_risk, _get_client
 from symptom_mapper import FRONTEND_TO_DATASET
 
@@ -547,19 +547,11 @@ def predict():
 def guest_status():
     """Check if the guest user has already consumed their 1 free AI health check."""
     guest_id = request.args.get("guest_id") or request.headers.get("X-Guest-ID", "").strip()
-    ip_address = request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip()
 
-    if not guest_id and not ip_address:
+    if not guest_id:
         return jsonify({"used": False, "remaining": 1}), 200
 
-    row = None
-    if guest_id:
-        row = query("SELECT id, created_at FROM guest_usage WHERE guest_id = %s LIMIT 1", (guest_id,), fetch_one=True)
-    if not row and ip_address and ip_address != "127.0.0.1":
-        row = query(
-            "SELECT id, created_at FROM guest_usage WHERE ip_address = %s AND created_at >= NOW() - INTERVAL '24 hours' LIMIT 1",
-            (ip_address,), fetch_one=True
-        )
+    row = query("SELECT id, created_at FROM guest_usage WHERE guest_id = %s LIMIT 1", (guest_id,), fetch_one=True)
 
     is_used = bool(row)
     return jsonify({
@@ -695,12 +687,25 @@ def guest_predict():
             )
 
     # Record guest usage to enforce 1-time limit
-    execute(
+    claimed = execute(
         """INSERT INTO guest_usage (guest_id, ip_address, prediction_id)
            VALUES (%s, %s, %s)
            ON CONFLICT (guest_id) DO NOTHING""",
         (guest_id, ip_address, prediction_id),
     )
+
+    if claimed == 0:
+        # A concurrent request with this guest_id already claimed the free assessment!
+        # Safely remove this request's unlinked prediction records in an atomic transaction
+        execute_transaction([
+            ("DELETE FROM prediction_results WHERE prediction_id = %s", (prediction_id,)),
+            ("DELETE FROM predictions WHERE id = %s", (prediction_id,)),
+        ])
+        return jsonify({
+            "error": "1-Time Free Check limit reached. Please sign in or create a free account to perform unlimited clinical assessments.",
+            "code": "GUEST_LIMIT_REACHED",
+            "used": True,
+        }), 403
 
     model_info_data = get_model_info()
 

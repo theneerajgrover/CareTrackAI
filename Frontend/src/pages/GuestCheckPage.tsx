@@ -30,8 +30,13 @@ const POPULAR_SYMPTOMS = [
 ]
 
 export default function GuestCheckPage({ onNavigate, onOpenAuth }: GuestCheckPageProps) {
-  const [checkingStatus, setCheckingStatus] = useState(true)
-  const [alreadyUsed, setAlreadyUsed] = useState(false)
+  const [alreadyUsed, setAlreadyUsed] = useState(() => {
+    try {
+      return localStorage.getItem('caretrack_guest_used') === 'true'
+    } catch {
+      return false
+    }
+  })
   const [allSymptoms, setAllSymptoms] = useState<{ id: number; key: string; label: string; category: string }[]>([])
   const [search, setSearch] = useState('')
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([])
@@ -41,25 +46,34 @@ export default function GuestCheckPage({ onNavigate, onOpenAuth }: GuestCheckPag
   const [prediction, setPrediction] = useState<PredictionResponse | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  // Verify 1-time guest limit on mount
+  // Verify 1-time guest limit on mount in background without blocking initial render
   useEffect(() => {
+    let isMounted = true
+
     async function checkLimit() {
+      if (alreadyUsed) return
       try {
-        const status = await getGuestStatus()
-        if (status.used) {
+        const timeoutPromise = new Promise<{ used: boolean }>((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), 3500)
+        )
+        const status = await Promise.race([getGuestStatus(), timeoutPromise])
+        if (isMounted && status?.used) {
           setAlreadyUsed(true)
+          try {
+            localStorage.setItem('caretrack_guest_used', 'true')
+          } catch {}
         }
       } catch {
-        // Continue if network check fails
-      } finally {
-        setCheckingStatus(false)
+        // Silently proceed so guest can interact with symptoms immediately
       }
     }
 
     async function loadSymptoms() {
       try {
         const list = await getAllSymptoms()
-        setAllSymptoms(list)
+        if (isMounted && list && list.length > 0) {
+          setAllSymptoms(list)
+        }
       } catch {
         // Fallback to popular if list fails
       }
@@ -67,7 +81,11 @@ export default function GuestCheckPage({ onNavigate, onOpenAuth }: GuestCheckPag
 
     checkLimit()
     loadSymptoms()
-  }, [])
+
+    return () => {
+      isMounted = false
+    }
+  }, [alreadyUsed])
 
   function toggleSymptom(key: string) {
     if (selectedSymptoms.includes(key)) {
@@ -98,7 +116,16 @@ export default function GuestCheckPage({ onNavigate, onOpenAuth }: GuestCheckPag
       })
       setPrediction(res)
       setAlreadyUsed(true)
+      try {
+        localStorage.setItem('caretrack_guest_used', 'true')
+      } catch {}
     } catch (err: any) {
+      if (err.message && (err.message.includes('limit reached') || err.message.includes('GUEST_LIMIT_REACHED'))) {
+        setAlreadyUsed(true)
+        try {
+          localStorage.setItem('caretrack_guest_used', 'true')
+        } catch {}
+      }
       setErrorMessage(err.message || 'Prediction failed. Please try again.')
     } finally {
       setAnalyzing(false)
@@ -131,12 +158,7 @@ export default function GuestCheckPage({ onNavigate, onOpenAuth }: GuestCheckPag
 
       {/* ── Main Container ── */}
       <div className="max-w-3xl w-full mx-auto flex-1 flex flex-col justify-center">
-        {checkingStatus ? (
-          <div className="text-center py-24">
-            <div className="w-8 h-8 rounded-full border-2 border-accent border-t-transparent animate-spin mx-auto mb-4" />
-            <p className="text-sm text-muted-foreground">Checking guest health assessment status...</p>
-          </div>
-        ) : alreadyUsed && !prediction ? (
+        {alreadyUsed && !prediction ? (
           /* ── Free Trial Already Consumed State ── */
           <motion.div
             initial={{ opacity: 0, y: 16 }}
