@@ -40,7 +40,7 @@ jobs:
         env:
           GITHUB_PAGES: 'true'
           VITE_BASE_PATH: '/CareTrackAI/'
-          VITE_API_BASE: ${{ vars.VITE_API_BASE || 'https://caretrack-ai.onrender.com/api' }}
+          VITE_API_BASE: ${{ vars.VITE_API_BASE || 'https://caretrackai.onrender.com/api' }}
         run: npm run build
 
       - name: Upload GitHub Pages artifact

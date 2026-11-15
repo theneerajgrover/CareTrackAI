@@ -17,7 +17,7 @@ import type {
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE ||
   ((import.meta as any).env?.PROD
-    ? 'https://caretrack-ai.onrender.com/api'
+    ? 'https://caretrackai.onrender.com/api'
     : 'http://127.0.0.1:5000/api')
 
 // ── Admin Token Storage ─────────────────────────────────────────────────────

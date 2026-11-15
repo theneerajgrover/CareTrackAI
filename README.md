@@ -22,7 +22,7 @@
   <a href="https://theneerajgrover.github.io/CareTrackAI/">
     <img src="https://img.shields.io/badge/Live_Demo-GitHub_Pages-22c55e?style=for-the-badge&logo=githubpages&logoColor=white" alt="Live Demo" />
   </a>
-  <a href="https://caretrack-ai.onrender.com/api/health">
+  <a href="https://caretrackai.onrender.com/api/health">
     <img src="https://img.shields.io/badge/Backend_API-Render_Live-0ea5e9?style=for-the-badge&logo=render&logoColor=white" alt="Backend API" />
   </a>
   <a href="#-machine-learning--performance">
