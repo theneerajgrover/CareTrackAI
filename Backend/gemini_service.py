@@ -27,7 +27,7 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 GEMINI_SECONDARY_MODEL = os.getenv("GEMINI_SECONDARY_MODEL", "gemini-3.6-flash")
-GEMINI_TIMEOUT_SECONDS = float(os.getenv("GEMINI_TIMEOUT_SECONDS", "1.0"))
+GEMINI_TIMEOUT_SECONDS = float(os.getenv("GEMINI_TIMEOUT_SECONDS", "2.5"))
 
 # Thread-safe in-memory cache for remedies
 _CACHE_LOCK = threading.Lock()
@@ -423,11 +423,12 @@ def generate_remedies_and_warnings(predictions: list) -> list:
             if cached:
                 remedies_text = cached
             else:
-                # Immediate clinical library fallback (<0.01ms)
-                remedies_text = _get_clinical_fallback(disease)
+                # Fetch fresh AI remedies within timeout; falls back to clinical library automatically
+                remedies_text = _fetch_gemini_remedies_with_deadline(
+                    disease, confidence, timeout_sec=GEMINI_TIMEOUT_SECONDS
+                )
                 with _CACHE_LOCK:
                     _REMEDIES_CACHE[cache_key] = remedies_text
-                needed_remedies.append((disease, confidence))
 
         enriched.append({
             **pred,
@@ -438,18 +439,5 @@ def generate_remedies_and_warnings(predictions: list) -> list:
             "warning": warning_text,
             "warning_text": warning_text,
         })
-
-    # Trigger asynchronous background AI enrichment for future requests if client is ready
-    if needed_remedies and _get_client():
-        for d, c in needed_remedies:
-            def _bg_worker(dis=d, conf=c):
-                try:
-                    res = _fetch_gemini_remedies_with_deadline(dis, conf, timeout_sec=2.0)
-                    if res and len(res) > 20:
-                        with _CACHE_LOCK:
-                            _REMEDIES_CACHE[dis.lower().strip()] = res
-                except Exception:
-                    pass
-            _EXECUTOR.submit(_bg_worker)
 
     return enriched
