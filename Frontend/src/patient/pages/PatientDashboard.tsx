@@ -93,7 +93,9 @@ export default function PatientDashboard({
               <Activity size={18} color="#4338CA" />
             </div>
           </div>
-          <div className="patient-stat-card-value">{loading ? '—' : stats?.total_analyses || 0}</div>
+          <div className="patient-stat-card-value">
+            {loading ? <span style={{ display: 'inline-block', width: 36, height: 24, borderRadius: 6, background: '#e2e8f0', animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite' }} /> : (stats?.total_analyses ?? 0)}
+          </div>
           <div className="patient-stat-card-sub">Completed health assessments</div>
         </div>
 
@@ -104,7 +106,9 @@ export default function PatientDashboard({
               <FileText size={18} color="#059669" />
             </div>
           </div>
-          <div className="patient-stat-card-value">{loading ? '—' : stats?.total_reports || 0}</div>
+          <div className="patient-stat-card-value">
+            {loading ? <span style={{ display: 'inline-block', width: 36, height: 24, borderRadius: 6, background: '#e2e8f0', animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite' }} /> : (stats?.total_reports ?? 0)}
+          </div>
           <div className="patient-stat-card-sub">Clinical reports on file</div>
         </div>
 
@@ -116,7 +120,7 @@ export default function PatientDashboard({
             </div>
           </div>
           <div className="patient-stat-card-value" style={{ color: (stats?.critical_alerts || 0) > 0 ? '#DC2626' : '#059669' }}>
-            {loading ? '—' : stats?.critical_alerts || 0}
+            {loading ? <span style={{ display: 'inline-block', width: 36, height: 24, borderRadius: 6, background: '#e2e8f0', animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite' }} /> : (stats?.critical_alerts ?? 0)}
           </div>
           <div className="patient-stat-card-sub">
             {(stats?.critical_alerts || 0) > 0 ? 'Requires clinical review' : 'No urgent alerts'}
@@ -131,7 +135,7 @@ export default function PatientDashboard({
             </div>
           </div>
           <div className="patient-stat-card-value" style={{ fontSize: 16, textTransform: 'capitalize' }}>
-            {loading ? '—' : latest ? latest.disease : 'None'}
+            {loading ? <span style={{ display: 'inline-block', width: 80, height: 20, borderRadius: 6, background: '#e2e8f0', animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite' }} /> : latest ? latest.disease : 'None'}
           </div>
           <div className="patient-stat-card-sub">
             {latest?.confidence ? `${latest.confidence.toFixed(1)}% match` : 'Ready for assessment'}
@@ -139,46 +143,41 @@ export default function PatientDashboard({
         </div>
       </div>
 
-      {/* Quick Navigation Controls */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Health Workspace Shortcuts
+      {/* Health Workspace Shortcuts Container */}
+      <section className="patient-shortcuts-section" aria-label="Health Workspace Shortcuts">
+        <div className="patient-shortcuts-header">
+          <div className="patient-shortcuts-title">
+            Health Workspace Shortcuts
+          </div>
+          <span className="patient-shortcuts-count">6 Quick Tools</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+        <div className="patient-shortcuts-grid">
           {[
             { id: 'patient-chatbot' as PatientPage, label: 'Medical Assistant', icon: Bot, desc: 'AI Health Chatbot' },
             { id: 'patient-analyses' as PatientPage, label: 'My Analyses', icon: Activity, desc: 'View past evaluations' },
             { id: 'patient-reports' as PatientPage, label: 'Medical Reports', icon: FileText, desc: 'Clinical documentation' },
             { id: 'patient-symptoms' as PatientPage, label: 'Symptom Library', icon: Stethoscope, desc: '377 health signals' },
             { id: 'patient-recommendations' as PatientPage, label: 'Clinical Guidance', icon: ShieldCheck, desc: 'Doctor & home remedies' },
-            { id: 'patient-notifications' as PatientPage, label: 'Notifications', icon: Bell, desc: 'Health updates' },
             { id: 'patient-feedback' as PatientPage, label: 'Feedback', icon: MessageSquare, desc: 'Contact care team' },
-            { id: 'patient-profile' as PatientPage, label: 'My Profile', icon: UserIcon, desc: 'Manage account' },
           ].map((q) => (
             <button
               key={q.id}
               onClick={() => onNavigate(q.id)}
-              className="patient-stat-card"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '10px 14px',
-                textAlign: 'left',
-                border: '1px solid var(--color-border, #e2e8f0)',
-                background: '#fff',
-                cursor: 'pointer',
-              }}
+              className="patient-shortcut-btn"
+              type="button"
+              aria-label={`${q.label} - ${q.desc}`}
             >
-              <q.icon size={16} color="#4338CA" />
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-foreground, #0f172a)' }}>{q.label}</div>
-                <div style={{ fontSize: 10, color: '#64748b' }}>{q.desc}</div>
+              <div className="patient-shortcut-icon-wrapper">
+                <q.icon size={17} />
+              </div>
+              <div className="patient-shortcut-content">
+                <div className="patient-shortcut-label">{q.label}</div>
+                <div className="patient-shortcut-desc">{q.desc}</div>
               </div>
             </button>
           ))}
         </div>
-      </div>
+      </section>
 
       {/* AI Medical Assistant Interactive Banner */}
       <div

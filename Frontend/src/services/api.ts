@@ -269,8 +269,14 @@ export async function getPredictionDetails(id: string): Promise<any> {
 
 // ── Metadata APIs ──────────────────────────────────────────────────────────────
 
+let _symptomsCache: { id: number; key: string; label: string; category: string }[] | null = null
+let _modelInfoCache: any = null
+
 export async function getModelInfo(): Promise<any> {
-  return request('/model/info', { method: 'GET' })
+  if (_modelInfoCache) return _modelInfoCache
+  const res = await request('/model/info', { method: 'GET' })
+  _modelInfoCache = res
+  return res
 }
 
 export async function getBackendHealth(): Promise<{ status: string }> {
@@ -278,7 +284,11 @@ export async function getBackendHealth(): Promise<{ status: string }> {
 }
 
 export async function getAllSymptoms(): Promise<{ id: number; key: string; label: string; category: string }[]> {
+  if (_symptomsCache && _symptomsCache.length > 0) return _symptomsCache
   const res = await request<{ symptoms: { id: number; key: string; label: string; category: string }[] }>('/symptoms', { method: 'GET' })
+  if (res.symptoms && res.symptoms.length > 0) {
+    _symptomsCache = res.symptoms
+  }
   return res.symptoms || []
 }
 
@@ -348,6 +358,108 @@ export async function sendChatMessage(
     method: 'POST',
     body: JSON.stringify({ message, session_id: sessionId }),
   })
+}
+
+export async function sendChatMessageStream(
+  message: string,
+  sessionId?: string,
+  onChunk?: (delta: string) => void,
+  onSession?: (newSessionId: string) => void
+): Promise<{ session_id: string; message: import('../types').ChatMessage }> {
+  const token = getAccessToken()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Accept': 'text/event-stream',
+  }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  const res = await fetch(`${API_BASE}/user/chat/send`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ message, session_id: sessionId, stream: true }),
+  })
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}))
+    throw new Error(errData.error || `HTTP ${res.status}: ${res.statusText}`)
+  }
+
+  if (!res.body) {
+    throw new Error('Response body is unavailable for streaming.')
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let finalSessionId = sessionId || ''
+  let accumulatedContent = ''
+  let completedMessage: import('../types').ChatMessage | null = null
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || !trimmed.startsWith('data:')) continue
+      const dataStr = trimmed.slice(5).trim()
+      if (!dataStr) continue
+
+      try {
+        const parsed = JSON.parse(dataStr)
+        if (parsed.type === 'session') {
+          finalSessionId = parsed.session_id
+          if (onSession && parsed.session_id) {
+            onSession(parsed.session_id)
+          }
+        } else if (parsed.type === 'chunk' && parsed.delta) {
+          accumulatedContent += parsed.delta
+          if (onChunk) {
+            onChunk(parsed.delta)
+          }
+        } else if (parsed.type === 'done') {
+          completedMessage = {
+            id: parsed.message_id || 'msg-' + Date.now(),
+            sender: 'assistant',
+            content: accumulatedContent,
+            model: parsed.model || 'gemini-3.5-flash-lite',
+            response_time_ms: parsed.response_time_ms || 0,
+            status: parsed.status || 'success',
+            created_at: new Date().toISOString(),
+          }
+        } else if (parsed.type === 'error') {
+          throw new Error(parsed.error || 'Chat generation failed.')
+        }
+      } catch (parseErr: any) {
+        if (parseErr.message && !parseErr.message.includes('JSON')) {
+          throw parseErr
+        }
+      }
+    }
+  }
+
+  if (!completedMessage) {
+    completedMessage = {
+      id: 'msg-' + Date.now(),
+      sender: 'assistant',
+      content: accumulatedContent || "Sorry, I'm unable to respond right now. Please try again shortly.",
+      model: 'gemini-3.5-flash-lite',
+      response_time_ms: 0,
+      status: 'success',
+      created_at: new Date().toISOString(),
+    }
+  }
+
+  return {
+    session_id: finalSessionId,
+    message: completedMessage,
+  }
 }
 
 export async function deleteChatSession(sessionId: string): Promise<{ message: string }> {

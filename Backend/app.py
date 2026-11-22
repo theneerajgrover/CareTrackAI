@@ -18,18 +18,20 @@ Endpoints:
 """
 
 import os
+import time
+import json
 import uuid
 import functools
 from datetime import datetime, timedelta, timezone
 
 import jwt
 import bcrypt
-from flask import Flask, request, jsonify, g
+from flask import Flask, request, jsonify, g, Response, stream_with_context
 from flask_cors import CORS
 from dotenv import load_dotenv
 
 from predict import predict_disease, get_model_info, get_available_symptoms, _load_model
-from database import query, execute, execute_returning, execute_transaction
+from database import query, execute, execute_returning, execute_transaction, execute_values
 from gemini_service import generate_remedies_and_warnings, classify_risk, _get_client
 from symptom_mapper import FRONTEND_TO_DATASET
 
@@ -195,8 +197,8 @@ def register():
     if existing:
         return jsonify({"error": "User already exists"}), 409
 
-    # Hash password with bcrypt
-    password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    # Hash password with bcrypt (cost factor 10 for optimal OWASP security & fast low-vCPU performance)
+    password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(10)).decode("utf-8")
 
     # Insert user
     user = execute_returning(
@@ -490,23 +492,26 @@ def predict():
         )
         prediction_id = str(prediction_record["id"])
 
-        # -- Step 6: Store each prediction result (batch insert) --
+        # -- Step 6: Store each prediction result (atomic batch insert in 1 network round-trip) --
         if enriched_predictions:
-            for pred in enriched_predictions:
-                execute(
-                    """INSERT INTO prediction_results
-                       (prediction_id, disease_id, confidence_pct, rank, risk_level, remedies_text, warning_text)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-                    (
-                        prediction_id,
-                        pred.get("disease_id"),
-                        pred["confidence"],
-                        pred["rank"],
-                        pred.get("risk_level", "low"),
-                        pred.get("remedies_text"),
-                        pred.get("warning_text"),
-                    ),
+            values = [
+                (
+                    prediction_id,
+                    pred.get("disease_id"),
+                    pred["confidence"],
+                    pred["rank"],
+                    pred.get("risk_level", "low"),
+                    pred.get("remedies_text"),
+                    pred.get("warning_text"),
                 )
+                for pred in enriched_predictions
+            ]
+            execute_values(
+                """INSERT INTO prediction_results
+                   (prediction_id, disease_id, confidence_pct, rank, risk_level, remedies_text, warning_text)
+                   VALUES %s""",
+                values,
+            )
 
     # -- Step 7: Build response --
     model_info_data = get_model_info()
@@ -668,23 +673,26 @@ def guest_predict():
     )
     prediction_id = str(prediction_record["id"])
 
-    # Persist prediction findings
+    # Persist prediction findings (atomic batch insert in 1 network round-trip)
     if enriched_predictions:
-        for pred in enriched_predictions:
-            execute(
-                """INSERT INTO prediction_results
-                   (prediction_id, disease_id, confidence_pct, rank, risk_level, remedies_text, warning_text)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-                (
-                    prediction_id,
-                    pred.get("disease_id"),
-                    pred["confidence"],
-                    pred["rank"],
-                    pred.get("risk_level", "low"),
-                    pred.get("remedies_text"),
-                    pred.get("warning_text"),
-                ),
+        values = [
+            (
+                prediction_id,
+                pred.get("disease_id"),
+                pred["confidence"],
+                pred["rank"],
+                pred.get("risk_level", "low"),
+                pred.get("remedies_text"),
+                pred.get("warning_text"),
             )
+            for pred in enriched_predictions
+        ]
+        execute_values(
+            """INSERT INTO prediction_results
+               (prediction_id, disease_id, confidence_pct, rank, risk_level, remedies_text, warning_text)
+               VALUES %s""",
+            values,
+        )
 
     # Record guest usage to enforce 1-time limit
     claimed = execute(
@@ -745,30 +753,37 @@ def guest_predict():
 @app.route("/api/predictions", methods=["GET"])
 @require_auth
 def list_predictions():
-    """List all predictions for the authenticated user."""
+    """List all predictions for the authenticated user in 1 single high-performance query."""
     rows = query(
-        """SELECT id, patient_name, symptom_ids, created_at
-           FROM predictions WHERE user_id = %s ORDER BY created_at DESC LIMIT 50""",
+        """SELECT p.id, p.patient_name, p.symptom_ids, p.created_at,
+                  pr.confidence_pct as top_confidence,
+                  d.name as top_disease,
+                  COALESCE(pr_counts.num_findings, 0) as num_findings
+           FROM predictions p
+           LEFT JOIN prediction_results pr ON pr.prediction_id = p.id AND pr.rank = 1
+           LEFT JOIN diseases d ON pr.disease_id = d.id
+           LEFT JOIN (
+               SELECT prediction_id, COUNT(*) as num_findings
+               FROM prediction_results
+               GROUP BY prediction_id
+           ) pr_counts ON pr_counts.prediction_id = p.id
+           WHERE p.user_id = %s
+           ORDER BY p.created_at DESC LIMIT 50""",
         (g.user_id,), fetch_all=True,
     )
 
-    predictions = []
-    for row in rows:
-        results = query(
-            """SELECT pr.rank, pr.confidence_pct, pr.risk_level, d.name as disease
-               FROM prediction_results pr LEFT JOIN diseases d ON pr.disease_id = d.id
-               WHERE pr.prediction_id = %s ORDER BY pr.rank""",
-            (str(row["id"]),), fetch_all=True,
-        )
-        predictions.append({
-            "id": str(row["id"]),
-            "patient_name": row["patient_name"],
-            "symptom_ids": row["symptom_ids"],
-            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-            "top_disease": results[0]["disease"] if results else None,
-            "top_confidence": float(results[0]["confidence_pct"]) if results else None,
-            "num_findings": len(results),
-        })
+    predictions = [
+        {
+            "id": str(r["id"]),
+            "patient_name": r["patient_name"],
+            "symptom_ids": r["symptom_ids"],
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "top_disease": r["top_disease"],
+            "top_confidence": float(r["top_confidence"]) if r["top_confidence"] is not None else None,
+            "num_findings": int(r["num_findings"] or 0),
+        }
+        for r in (rows or [])
+    ]
 
     return jsonify({"predictions": predictions}), 200
 
@@ -791,11 +806,19 @@ def get_prediction(prediction_id):
         (prediction_id,), fetch_all=True,
     )
 
-    # Resolve symptom names from IDs
+    # Resolve symptom names from IDs using cache and bulk query
     symptom_names = []
     if pred["symptom_ids"]:
+        missing_ids = [sid for sid in pred["symptom_ids"] if not any(s.get("id") == sid for s in _SYMPTOM_MAP_CACHE.values())]
+        if missing_ids:
+            fetched = query("SELECT id, key, label FROM symptoms WHERE id = ANY(%s)", (missing_ids,), fetch_all=True)
+            if fetched:
+                for f in fetched:
+                    _SYMPTOM_MAP_CACHE[f["key"]] = f
+
+        cache_by_id = {s["id"]: s for s in _SYMPTOM_MAP_CACHE.values() if "id" in s}
         for sid in pred["symptom_ids"]:
-            s = query("SELECT key, label FROM symptoms WHERE id = %s", (sid,), fetch_one=True)
+            s = cache_by_id.get(sid)
             if s:
                 symptom_names.append({"id": sid, "key": s["key"], "label": s["label"]})
 
@@ -1091,11 +1114,13 @@ def get_chat_session_messages(session_id):
 def send_chat_message():
     """
     Send a message to the AI Medical Assistant.
+    Supports both instant SSE streaming and traditional non-streaming response.
     Persists user message & AI response in PostgreSQL database with response latency.
     """
     data = request.get_json() or {}
     message_text = data.get("message", "").strip()
     session_id = data.get("session_id")
+    should_stream = bool(data.get("stream")) or request.headers.get("Accept") == "text/event-stream"
 
     if not message_text:
         return jsonify({"error": "Message content is required"}), 400
@@ -1125,65 +1150,124 @@ def send_chat_message():
         (session_id, g.user_id, message_text)
     )
 
-    # 3. Retrieve authenticated patient's clinical context (safely isolated to g.user_id)
-    u_row = query("SELECT name, phone FROM users WHERE id = %s", (g.user_id,), fetch_one=True)
-    latest_pred = query(
-        """SELECT p.id, p.patient_name, p.patient_age, p.patient_gender, p.patient_blood_group, p.symptom_ids
-           FROM predictions p
-           WHERE p.user_id = %s
+    # 3. Retrieve authenticated patient's clinical context via a single consolidated query
+    ctx_row = query(
+        """SELECT u.name,
+                  p.id as pred_id, p.patient_age, p.patient_gender, p.symptom_ids,
+                  pr.confidence_pct, pr.risk_level, d.name as disease
+           FROM users u
+           LEFT JOIN predictions p ON p.user_id = u.id
+           LEFT JOIN prediction_results pr ON pr.prediction_id = p.id AND pr.rank = 1
+           LEFT JOIN diseases d ON pr.disease_id = d.id
+           WHERE u.id = %s
            ORDER BY p.created_at DESC LIMIT 1""",
         (g.user_id,), fetch_one=True
     )
 
     patient_ctx = {
-        "name": u_row.get("name") if u_row else "Patient",
+        "name": ctx_row.get("name") if ctx_row else "Patient",
     }
 
-    if latest_pred:
-        patient_ctx["age"] = latest_pred.get("patient_age")
-        patient_ctx["gender"] = latest_pred.get("patient_gender")
+    if ctx_row and ctx_row.get("pred_id"):
+        patient_ctx["age"] = ctx_row.get("patient_age")
+        patient_ctx["gender"] = ctx_row.get("patient_gender")
+        patient_ctx["latest_condition"] = ctx_row.get("disease")
+        patient_ctx["latest_confidence"] = float(ctx_row["confidence_pct"]) if ctx_row.get("confidence_pct") else 0
+        patient_ctx["risk_level"] = ctx_row.get("risk_level")
 
-        # Get top result for latest prediction
-        top_res = query(
-            """SELECT pr.confidence_pct, pr.risk_level, d.name as disease
-               FROM prediction_results pr LEFT JOIN diseases d ON pr.disease_id = d.id
-               WHERE pr.prediction_id = %s ORDER BY pr.rank LIMIT 1""",
-            (str(latest_pred["id"]),), fetch_one=True
-        )
-        if top_res:
-            patient_ctx["latest_condition"] = top_res.get("disease")
-            patient_ctx["latest_confidence"] = float(top_res["confidence_pct"]) if top_res.get("confidence_pct") else 0
-            patient_ctx["risk_level"] = top_res.get("risk_level")
+        # Resolve symptom labels from in-memory cache in 0ms
+        sids = ctx_row.get("symptom_ids") or []
+        if sids:
+            sym_cache_by_id = {s["id"]: s["label"] for s in _SYMPTOM_MAP_CACHE.values() if "id" in s}
+            labels = [sym_cache_by_id[sid] for sid in sids if sid in sym_cache_by_id]
+            if labels:
+                patient_ctx["symptoms"] = labels
 
-        # Get readable symptom labels
-        if latest_pred.get("symptom_ids"):
-            s_rows = query("SELECT label FROM symptoms WHERE id = ANY(%s)", (latest_pred["symptom_ids"],), fetch_all=True)
-            if s_rows:
-                patient_ctx["symptoms"] = [s["label"] for s in s_rows]
-
-    # 4. Fetch recent conversation history for continuity
+    # 4. Fetch recent conversation history for continuity (limit 8)
     past_messages = query(
         """SELECT sender as role, content FROM chat_messages
            WHERE session_id = %s AND user_id = %s
-           ORDER BY created_at ASC LIMIT 10""",
+           ORDER BY created_at ASC LIMIT 8""",
         (session_id, g.user_id), fetch_all=True
     )
 
-    # 5. Call OpenAI service
+    conv_messages = past_messages or [{"role": "user", "content": message_text}]
+
+    # 5. Handle SSE Streaming Response if requested
+    if should_stream:
+        def generate_sse():
+            start_t = time.time()
+            ttft_recorded = False
+            ttft_ms = 0
+            full_chunks = []
+            used_model = "gemini-3.5-flash-lite"
+            status = "success"
+            error_msg = None
+
+            # Initial metadata event
+            yield f"data: {json.dumps({'type': 'session', 'session_id': session_id, 'user_msg_id': str(user_msg_rec['id'])})}\n\n"
+
+            try:
+                from openai_service import stream_chat_response
+                for chunk, m_name in stream_chat_response(conv_messages, patient_ctx):
+                    if not ttft_recorded:
+                        ttft_ms = int((time.time() - start_t) * 1000)
+                        ttft_recorded = True
+                    used_model = m_name or used_model
+                    full_chunks.append(chunk)
+                    yield f"data: {json.dumps({'type': 'chunk', 'delta': chunk})}\n\n"
+            except Exception as e:
+                status = "failed"
+                error_msg = str(e)
+                fallback = "Sorry, I'm unable to respond right now. Please try again shortly."
+                if not full_chunks:
+                    full_chunks.append(fallback)
+                    yield f"data: {json.dumps({'type': 'chunk', 'delta': fallback})}\n\n"
+
+            total_elapsed_ms = int((time.time() - start_t) * 1000)
+            final_text = "".join(full_chunks).strip()
+
+            # Persist assistant response in PostgreSQL
+            ai_msg_id = None
+            try:
+                ai_rec = execute_returning(
+                    """INSERT INTO chat_messages (session_id, user_id, sender, content, model, response_time_ms, status, error_message)
+                       VALUES (%s, %s, 'assistant', %s, %s, %s, %s, %s)
+                       RETURNING id, created_at""",
+                    (session_id, g.user_id, final_text, used_model, total_elapsed_ms, status, error_msg)
+                )
+                execute("UPDATE chat_sessions SET updated_at = NOW() WHERE id = %s", (session_id,))
+                if ai_rec:
+                    ai_msg_id = str(ai_rec["id"])
+            except Exception as dbe:
+                ai_msg_id = str(uuid.uuid4())
+
+            # Final completion event
+            yield f"data: {json.dumps({'type': 'done', 'session_id': session_id, 'message_id': ai_msg_id or str(uuid.uuid4()), 'ttft_ms': ttft_ms, 'response_time_ms': total_elapsed_ms, 'model': used_model, 'status': status})}\n\n"
+
+        return Response(
+            stream_with_context(generate_sse()),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "Connection": "keep-alive",
+            }
+        )
+
+    # 6. Non-Streaming Response (Backward Compatible)
     try:
         from openai_service import generate_chat_response
-        ai_result = generate_chat_response(past_messages or [{"role": "user", "content": message_text}], patient_ctx)
+        ai_result = generate_chat_response(conv_messages, patient_ctx)
     except Exception as e:
-        print(f"[app] Chat generation error: {e}")
         ai_result = {
             "content": "Sorry, I'm unable to respond right now. Please try again shortly.",
             "model": "caretrack-medical-assistant",
             "response_time_ms": 50,
             "status": "failed",
-            "error": str(e)
+            "error": str(e),
         }
 
-    # 6. Persist AI response
     ai_msg_rec = execute_returning(
         """INSERT INTO chat_messages (session_id, user_id, sender, content, model, response_time_ms, status, error_message)
            VALUES (%s, %s, 'assistant', %s, %s, %s, %s, %s)
@@ -1192,14 +1276,13 @@ def send_chat_message():
             session_id,
             g.user_id,
             ai_result["content"],
-            ai_result.get("model", "gpt-4o-mini"),
+            ai_result.get("model", "gemini-3.5-flash-lite"),
             ai_result.get("response_time_ms", 0),
             ai_result.get("status", "success"),
             ai_result.get("error"),
         )
     )
 
-    # 7. Update session timestamp
     execute("UPDATE chat_sessions SET updated_at = NOW() WHERE id = %s", (session_id,))
 
     return jsonify({
@@ -1208,7 +1291,7 @@ def send_chat_message():
             "id": str(ai_msg_rec["id"]),
             "sender": "assistant",
             "content": ai_result["content"],
-            "model": ai_result.get("model", "gpt-4o-mini"),
+            "model": ai_result.get("model", "gemini-3.5-flash-lite"),
             "response_time_ms": ai_result.get("response_time_ms", 0),
             "status": ai_result.get("status", "success"),
             "created_at": ai_msg_rec["created_at"].isoformat() if ai_msg_rec.get("created_at") else None,

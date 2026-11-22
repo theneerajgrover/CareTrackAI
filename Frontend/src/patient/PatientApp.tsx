@@ -233,6 +233,18 @@ export default function PatientApp({
           </div>
 
           <div className="patient-header-actions">
+            {page !== 'patient-notifications' && (
+              <button
+                type="button"
+                onClick={() => nav('patient-notifications')}
+                className="patient-header-bell-btn"
+                title="Notifications"
+                aria-label="Notifications"
+              >
+                <Bell size={18} />
+              </button>
+            )}
+
             <div className="patient-header-profile" onClick={() => setProfileOpen(!profileOpen)}>
               <div className="patient-header-avatar">{patientInitial}</div>
               <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{user?.name || 'Patient'}</span>

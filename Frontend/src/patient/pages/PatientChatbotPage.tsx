@@ -8,6 +8,7 @@ import {
   getChatSessions,
   getChatSessionMessages,
   sendChatMessage,
+  sendChatMessageStream,
   deleteChatSession,
   getUserStats
 } from '../../services/api'
@@ -130,17 +131,42 @@ export default function PatientChatbotPage({ user, initialQuery }: PatientChatbo
       content: text,
       created_at: new Date().toISOString(),
     }
-    setMessages((prev) => [...prev, tempUserMsg])
+
+    // Temporary streaming assistant message placeholder
+    const tempAiId = 'temp-ai-' + Date.now()
+    const tempAiMsg: ChatMessage = {
+      id: tempAiId,
+      sender: 'assistant',
+      content: '',
+      created_at: new Date().toISOString(),
+    }
+
+    setMessages((prev) => [...prev, tempUserMsg, tempAiMsg])
 
     try {
-      const res = await sendChatMessage(text, currentSessionId || undefined)
-      if (!currentSessionId) {
-        setCurrentSessionId(res.session_id)
-        // Refresh session list in background
-        getChatSessions().then((s) => setSessions(s.sessions || []))
-      }
-      setMessages((prev) => [...prev.filter((m) => m.id !== tempUserMsg.id), tempUserMsg, res.message])
+      const res = await sendChatMessageStream(
+        text,
+        currentSessionId || undefined,
+        (delta) => {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === tempAiId ? { ...m, content: m.content + delta } : m))
+          )
+        },
+        (newSessionId) => {
+          if (!currentSessionId) {
+            setCurrentSessionId(newSessionId)
+            getChatSessions().then((s) => setSessions(s.sessions || [])).catch(() => {})
+          }
+        }
+      )
+
+      // Replace temp streaming message with official persisted message
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempAiId ? res.message : m))
+      )
     } catch (err: any) {
+      // Remove empty streaming bubble if request failed before token generation
+      setMessages((prev) => prev.filter((m) => m.id !== tempAiId))
       setError(err.message || "Sorry, I'm unable to respond right now. Please try again shortly.")
     } finally {
       setSending(false)
@@ -306,7 +332,11 @@ export default function PatientChatbotPage({ user, initialQuery }: PatientChatbo
               </div>
             ) : (
               messages.map((msg, index) => {
+                if (!msg.content && msg.sender === 'assistant') {
+                  return null
+                }
                 const isUser = msg.sender === 'user'
+                const isStreaming = sending && msg.id?.startsWith('temp-ai-')
                 return (
                   <div
                     key={msg.id || index}
@@ -328,11 +358,16 @@ export default function PatientChatbotPage({ user, initialQuery }: PatientChatbo
                       {/* Message Content with simple bold & linebreaks support */}
                       <div className="space-y-1.5 whitespace-pre-wrap">
                         {msg.content}
+                        {isStreaming && (
+                          <span className="inline-block w-1.5 h-3.5 bg-accent ml-1 animate-pulse align-middle" />
+                        )}
                       </div>
 
                       <div className="mt-1.5 flex items-center justify-between gap-3 text-[10px] opacity-70">
                         <span>{msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                        {!isUser && msg.response_time_ms ? (
+                        {!isUser && isStreaming ? (
+                          <span className="font-mono text-[9px] text-accent animate-pulse">Streaming...</span>
+                        ) : !isUser && msg.response_time_ms ? (
                           <span className="font-mono text-[9px]">AI • {msg.response_time_ms}ms</span>
                         ) : null}
                       </div>
@@ -348,8 +383,8 @@ export default function PatientChatbotPage({ user, initialQuery }: PatientChatbo
               })
             )}
 
-            {/* Typing indicator */}
-            {sending && (
+            {/* Typing indicator: Show while waiting for the first streaming chunk */}
+            {sending && (!messages.length || (messages[messages.length - 1].sender === 'assistant' && !messages[messages.length - 1].content)) && (
               <div className="flex items-start gap-2.5">
                 <div className="w-7 h-7 rounded-lg bg-accent text-white flex items-center justify-center flex-shrink-0 mt-1 shadow-xs">
                   <Bot size={14} />

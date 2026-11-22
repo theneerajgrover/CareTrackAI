@@ -236,6 +236,18 @@ export default function AdminApp({ page, onNavigate, detailId }: AdminAppProps) 
               )}
             </div>
 
+            {page !== 'admin-notifications' && (
+              <button
+                type="button"
+                onClick={() => nav('admin-notifications')}
+                className="admin-header-bell-btn"
+                title="Notifications"
+                aria-label="Notifications"
+              >
+                <Bell size={18} />
+              </button>
+            )}
+
             <div className="admin-header-profile" onClick={() => setProfileOpen(!profileOpen)}>
               <div className="admin-header-avatar">
                 {adminUser.name.charAt(0).toUpperCase()}

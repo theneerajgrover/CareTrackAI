@@ -8,6 +8,7 @@ Includes automatic connection validation, stale socket eviction, and transaction
 
 import os
 import re
+import time
 import logging
 import threading
 import psycopg2
@@ -45,10 +46,15 @@ def _is_connection_error(exc):
     ])
 
 
-def _is_connection_alive(conn):
+_CONN_LAST_ACTIVE = {}
+_CONN_LOCK = threading.Lock()
+
+
+def _is_connection_alive(conn, max_idle_seconds=15.0):
     """
     Validate connection liveness before application queries.
     Detects closed, stale, or server-severed sockets without mutating transaction state.
+    Skips the network round-trip ping if the connection was confirmed healthy within max_idle_seconds.
     """
     if conn is None or getattr(conn, "closed", 0) != 0:
         return False
@@ -56,11 +62,20 @@ def _is_connection_alive(conn):
         # Reset any leftover aborted/in-progress transaction state
         if conn.info.transaction_status != psycopg2.extensions.TRANSACTION_STATUS_IDLE:
             conn.rollback()
+
+        # Check if connection was active recently and remains idle
+        with _CONN_LOCK:
+            last_active = _CONN_LAST_ACTIVE.get(id(conn), 0.0)
+        if last_active > 0 and (time.monotonic() - last_active) < max_idle_seconds:
+            return True
+
         # Fast query ping to verify network socket liveness
         with conn.cursor() as cur:
             cur.execute("SELECT 1;")
             cur.fetchone()
         conn.commit()
+        with _CONN_LOCK:
+            _CONN_LAST_ACTIVE[id(conn)] = time.monotonic()
         return True
     except Exception:
         return False
@@ -117,6 +132,8 @@ def close_pool():
         if _pool is not None and not _pool.closed:
             _pool.closeall()
         _pool = None
+    with _CONN_LOCK:
+        _CONN_LAST_ACTIVE.clear()
 
 
 def get_conn(max_retries=3):
@@ -163,6 +180,11 @@ def put_conn(conn, close=False):
         return
     p = get_pool()
     should_close = close or getattr(conn, "closed", 0) != 0
+    with _CONN_LOCK:
+        if should_close:
+            _CONN_LAST_ACTIVE.pop(id(conn), None)
+        else:
+            _CONN_LAST_ACTIVE[id(conn)] = time.monotonic()
     try:
         p.putconn(conn, close=should_close)
     except Exception as e:
@@ -202,7 +224,6 @@ def query(sql, params=None, fetch_one=False, fetch_all=False):
     finally:
         put_conn(conn, close=is_broken)
 
-
 def execute(sql, params=None):
     """
     Execute a statement (INSERT/UPDATE/DELETE) and return affected rows.
@@ -226,7 +247,6 @@ def execute(sql, params=None):
         raise e
     finally:
         put_conn(conn, close=is_broken)
-
 
 def execute_returning(sql, params=None):
     """
@@ -253,7 +273,6 @@ def execute_returning(sql, params=None):
     finally:
         put_conn(conn, close=is_broken)
 
-
 def execute_transaction(operations):
     """
     Execute a sequence of (sql, params) statements atomically within a single transaction.
@@ -274,6 +293,32 @@ def execute_transaction(operations):
             except Exception:
                 is_broken = True
         logger.error("Database transaction error: %s", _sanitize_error(e))
+        raise e
+    finally:
+        put_conn(conn, close=is_broken)
+
+def execute_values(sql, args_list, template=None, page_size=100):
+    """
+    Execute a bulk INSERT statement with multiple rows in a single network round-trip.
+    Uses psycopg2.extras.execute_values for maximum throughput.
+    """
+    if not args_list:
+        return 0
+    conn = get_conn()
+    is_broken = False
+    try:
+        with conn.cursor() as cur:
+            extras.execute_values(cur, sql, args_list, template=template, page_size=page_size)
+            conn.commit()
+            return cur.rowcount
+    except Exception as e:
+        is_broken = _is_connection_error(e) or getattr(conn, "closed", 0) != 0
+        if not is_broken:
+            try:
+                conn.rollback()
+            except Exception:
+                is_broken = True
+        logger.error("Database execute_values error: %s", _sanitize_error(e))
         raise e
     finally:
         put_conn(conn, close=is_broken)

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
 import {
   Menu, X, Activity, ArrowRight, History, LogOut, User as UserIcon,
-  ChevronDown, Sparkles, FileText, LayoutDashboard
+  ChevronDown, Sparkles, FileText, LayoutDashboard, Bell
 } from 'lucide-react'
 import { mobileMenu, mobileMenuBackdrop, mobileNavItem, buttonTap, buttonHover } from '../motion/variants'
 import type { Page, User } from '../types'
@@ -109,101 +109,129 @@ export default function Navbar({
           </div>
 
           {/* 3. Right: User Controls & CTAs */}
-          <div className="hidden md:flex items-center gap-3 z-10 flex-shrink-0">
+          <div className="hidden md:flex items-center gap-2.5 z-10 flex-shrink-0">
             {isAuthenticated ? (
-              <div className="relative" ref={dropdownRef}>
-                {/* User Profile Pill Button */}
-                <motion.button
-                  onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                  className={`flex items-center gap-2 h-9 px-3.5 rounded-full border text-[12px] font-medium transition-all ${
-                    userDropdownOpen
-                      ? 'border-accent bg-accent/10 text-accent shadow-sm'
-                      : 'border-border bg-card text-foreground hover:bg-secondary'
-                  }`}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <div className="w-5 h-5 rounded-full bg-accent text-white flex items-center justify-center text-[10px] font-bold">
-                    {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
-                  </div>
-                  <span className="max-w-[120px] truncate font-semibold">
-                    {user?.name || 'My Account'}
-                  </span>
-                  <motion.div
-                    animate={{ rotate: userDropdownOpen ? 180 : 0 }}
-                    transition={{ duration: 0.2 }}
+              <div className="flex items-center gap-2">
+                {currentPage !== 'patient-notifications' && (
+                  <motion.button
+                    onClick={() => go('patient-notifications')}
+                    className="flex items-center justify-center w-9 h-9 rounded-full border border-border bg-card text-muted-foreground hover:text-accent hover:border-accent/40 hover:bg-accent/10 transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    title="Notifications"
+                    aria-label="Notifications"
                   >
-                    <ChevronDown size={13} className="text-muted-foreground" />
-                  </motion.div>
-                </motion.button>
+                    <Bell size={16} />
+                  </motion.button>
+                )}
 
-                {/* User Dropdown Menu */}
-                <AnimatePresence>
-                  {userDropdownOpen && (
+                <div className="relative" ref={dropdownRef}>
+                  {/* User Profile Pill Button */}
+                  <motion.button
+                    onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                    className={`flex items-center gap-2 h-9 px-3.5 rounded-full border text-[12px] font-medium transition-all ${
+                      userDropdownOpen
+                        ? 'border-accent bg-accent/10 text-accent shadow-sm'
+                        : 'border-border bg-card text-foreground hover:bg-secondary'
+                    }`}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <div className="w-5 h-5 rounded-full bg-accent text-white flex items-center justify-center text-[10px] font-bold">
+                      {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                    </div>
+                    <span className="max-w-[120px] truncate font-semibold">
+                      {user?.name || 'My Account'}
+                    </span>
                     <motion.div
-                      initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                      transition={{ duration: 0.18, ease: 'easeOut' }}
-                      className="absolute right-0 mt-2 w-56 rounded-2xl border border-border bg-card shadow-xl p-2 z-50 backdrop-blur-xl"
+                      animate={{ rotate: userDropdownOpen ? 180 : 0 }}
+                      transition={{ duration: 0.2 }}
                     >
-                      {/* User Info Header */}
-                      <div className="px-3 py-2 border-b border-border/60 mb-1">
-                        <p className="text-[12px] font-bold text-foreground truncate">{user?.name || 'User'}</p>
-                        <p className="text-[10px] font-mono text-muted-foreground truncate">{user?.email || 'Authenticated'}</p>
-                      </div>
-
-                      {/* Admin Dashboard Option for Admins */}
-                      {(user?.email === 'admin@caretrack.ai' || Boolean(localStorage.getItem('caretrack_admin_access_token'))) && (
-                        <button
-                          onClick={() => go('admin-dashboard')}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-left transition-colors bg-accent/10 text-accent hover:bg-accent/20 mb-1"
-                        >
-                          <Activity size={14} className="text-accent" />
-                          <span>Admin Control Center</span>
-                        </button>
-                      )}
-
-                      {/* Patient Health Dashboard Option */}
-                      <button
-                        onClick={() => go('patient-dashboard')}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-left transition-colors ${
-                          currentPage === 'patient-dashboard'
-                            ? 'bg-accent text-white'
-                            : 'text-foreground hover:bg-secondary'
-                        }`}
-                      >
-                        <LayoutDashboard size={14} className={currentPage === 'patient-dashboard' ? 'text-white' : 'text-accent'} />
-                        <span>My Health Dashboard</span>
-                      </button>
-
-                      {/* History Option */}
-                      <button
-                        onClick={() => go('history')}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-medium text-left transition-colors ${
-                          currentPage === 'history'
-                            ? 'bg-accent text-white'
-                            : 'text-foreground hover:bg-secondary'
-                        }`}
-                      >
-                        <History size={14} className={currentPage === 'history' ? 'text-white' : 'text-accent'} />
-                        <span>Assessment History</span>
-                      </button>
-
-                      {/* Sign Out Option */}
-                      <button
-                        onClick={() => {
-                          setUserDropdownOpen(false)
-                          onLogout()
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-medium text-left text-critical hover:bg-critical/10 transition-colors mt-1"
-                      >
-                        <LogOut size={14} />
-                        <span>Sign Out</span>
-                      </button>
+                      <ChevronDown size={13} className="text-muted-foreground" />
                     </motion.div>
-                  )}
-                </AnimatePresence>
+                  </motion.button>
+
+                  {/* User Dropdown Menu */}
+                  <AnimatePresence>
+                    {userDropdownOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                        transition={{ duration: 0.18, ease: 'easeOut' }}
+                        className="absolute right-0 mt-2 w-56 rounded-2xl border border-border bg-card shadow-xl p-2 z-50 backdrop-blur-xl"
+                      >
+                        {/* User Info Header */}
+                        <div className="px-3 py-2 border-b border-border/60 mb-1">
+                          <p className="text-[12px] font-bold text-foreground truncate">{user?.name || 'User'}</p>
+                          <p className="text-[10px] font-mono text-muted-foreground truncate">{user?.email || 'Authenticated'}</p>
+                        </div>
+
+                        {/* Admin Dashboard Option for Admins */}
+                        {(user?.email === 'admin@caretrack.ai' || Boolean(localStorage.getItem('caretrack_admin_access_token'))) && (
+                          <button
+                            onClick={() => go('admin-dashboard')}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-left transition-colors bg-accent/10 text-accent hover:bg-accent/20 mb-1"
+                          >
+                            <Activity size={14} className="text-accent" />
+                            <span>Admin Control Center</span>
+                          </button>
+                        )}
+
+                        {/* Patient Health Dashboard Option */}
+                        <button
+                          onClick={() => go('patient-dashboard')}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-left transition-colors ${
+                            currentPage === 'patient-dashboard'
+                              ? 'bg-accent text-white'
+                              : 'text-foreground hover:bg-secondary'
+                          }`}
+                        >
+                          <LayoutDashboard size={14} className={currentPage === 'patient-dashboard' ? 'text-white' : 'text-accent'} />
+                          <span>My Health Dashboard</span>
+                        </button>
+
+                        {/* Notifications Option */}
+                        <button
+                          onClick={() => go('patient-notifications')}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-medium text-left transition-colors ${
+                            currentPage === 'patient-notifications'
+                              ? 'bg-accent text-white'
+                              : 'text-foreground hover:bg-secondary'
+                          }`}
+                        >
+                          <Bell size={14} className={currentPage === 'patient-notifications' ? 'text-white' : 'text-accent'} />
+                          <span>Notifications</span>
+                        </button>
+
+                        {/* History Option */}
+                        <button
+                          onClick={() => go('history')}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-medium text-left transition-colors ${
+                            currentPage === 'history'
+                              ? 'bg-accent text-white'
+                              : 'text-foreground hover:bg-secondary'
+                          }`}
+                        >
+                          <History size={14} className={currentPage === 'history' ? 'text-white' : 'text-accent'} />
+                          <span>Assessment History</span>
+                        </button>
+
+                        {/* Sign Out Option */}
+                        <button
+                          onClick={() => {
+                            setUserDropdownOpen(false)
+                            onLogout()
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-medium text-left text-critical hover:bg-critical/10 transition-colors mt-1"
+                        >
+                          <LogOut size={14} />
+                          <span>Sign Out</span>
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             ) : (
               <motion.button
@@ -341,6 +369,20 @@ export default function Navbar({
                       <History size={14} />
                       Assessment History
                     </motion.button>
+                    {currentPage !== 'patient-notifications' && (
+                      <motion.button
+                        onClick={() => go('patient-notifications')}
+                        className="text-left px-3 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 text-foreground hover:bg-secondary"
+                        custom={NAV_LINKS.length + 2}
+                        variants={mobileNavItem}
+                        initial="closed"
+                        animate="open"
+                        exit="exit"
+                      >
+                        <Bell size={14} className="text-accent" />
+                        Notifications
+                      </motion.button>
+                    )}
                   </>
                 )}
               </div>

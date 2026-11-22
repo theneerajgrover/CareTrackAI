@@ -483,29 +483,25 @@ def list_patients():
     # Get total count
     total = query(f"SELECT COUNT(*) as count FROM users {where_sql}", params, fetch_one=True)["count"]
 
-    # Get patients
+    # Get patients with aggregated prediction counts in a single query (replaces 2N+1 queries)
     rows = query(
-        f"""SELECT id, name, email, phone, role, status, created_at, last_login
-           FROM users {where_sql}
-           ORDER BY {sort_col} {sort_direction}
-           LIMIT %s OFFSET %s""",
+        f"""SELECT u.id, u.name, u.email, u.phone, u.role, u.status, u.created_at, u.last_login,
+                   COALESCE(p_stats.analysis_count, 0) as analysis_count,
+                   p_stats.last_analysis
+            FROM users u
+            LEFT JOIN (
+                SELECT user_id, COUNT(*) as analysis_count, MAX(created_at) as last_analysis
+                FROM predictions
+                GROUP BY user_id
+            ) p_stats ON p_stats.user_id = u.id
+            {where_sql}
+            ORDER BY {sort_col} {sort_direction}
+            LIMIT %s OFFSET %s""",
         params + [per_page, offset], fetch_all=True,
     )
 
-    # Get analysis counts for each patient
-    patients = []
-    for r in rows:
-        analysis_count = query(
-            "SELECT COUNT(*) as count FROM predictions WHERE user_id = %s",
-            (str(r["id"]),), fetch_one=True,
-        )["count"]
-
-        last_analysis = query(
-            "SELECT created_at FROM predictions WHERE user_id = %s ORDER BY created_at DESC LIMIT 1",
-            (str(r["id"]),), fetch_one=True,
-        )
-
-        patients.append({
+    patients = [
+        {
             "id": str(r["id"]),
             "name": r["name"],
             "email": r["email"],
@@ -513,9 +509,11 @@ def list_patients():
             "status": r.get("status", "active"),
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             "last_login": r["last_login"].isoformat() if r.get("last_login") else None,
-            "analysis_count": analysis_count,
-            "last_analysis": last_analysis["created_at"].isoformat() if last_analysis and last_analysis["created_at"] else None,
-        })
+            "analysis_count": int(r["analysis_count"] or 0),
+            "last_analysis": r["last_analysis"].isoformat() if r.get("last_analysis") else None,
+        }
+        for r in (rows or [])
+    ]
 
     log_audit("view_patients", "patients")
 
@@ -638,36 +636,44 @@ def list_analyses():
     rows = query(
         f"""SELECT p.id, p.user_id, p.patient_name, p.patient_age, p.patient_gender,
                    p.symptom_ids, p.created_at, p.status, p.processing_time_ms, p.model_version,
-                   u.name as user_name, u.email as user_email
+                   u.name as user_name, u.email as user_email,
+                   pr_top.confidence_pct as top_confidence,
+                   d.name as top_disease,
+                   COALESCE(pr_cnt.result_count, 0) as result_count
            FROM predictions p
            LEFT JOIN users u ON p.user_id = u.id
+           LEFT JOIN prediction_results pr_top ON pr_top.prediction_id = p.id AND pr_top.rank = 1
+           LEFT JOIN diseases d ON pr_top.disease_id = d.id
+           LEFT JOIN (
+               SELECT prediction_id, COUNT(*) as result_count
+               FROM prediction_results
+               GROUP BY prediction_id
+           ) pr_cnt ON pr_cnt.prediction_id = p.id
            {where_sql}
            ORDER BY p.created_at DESC
            LIMIT %s OFFSET %s""",
         params + [per_page, offset], fetch_all=True,
     )
 
+    # Resolve symptom categories in a single bulk lookup across all rows
+    all_sids = set()
+    for r in (rows or []):
+        if r.get("symptom_ids"):
+            all_sids.update(r["symptom_ids"][:5])
+
+    sid_to_cat = {}
+    if all_sids:
+        s_rows = query("SELECT id, category FROM symptoms WHERE id = ANY(%s)", (list(all_sids),), fetch_all=True)
+        if s_rows:
+            sid_to_cat = {s["id"]: s["category"] for s in s_rows if s.get("category")}
+
     analyses = []
-    for r in rows:
-        result_count = query(
-            "SELECT COUNT(*) as count FROM prediction_results WHERE prediction_id = %s",
-            (str(r["id"]),), fetch_one=True,
-        )["count"]
-
-        top_result = query(
-            """SELECT d.name as disease, pr.confidence_pct
-               FROM prediction_results pr JOIN diseases d ON pr.disease_id = d.id
-               WHERE pr.prediction_id = %s ORDER BY pr.rank LIMIT 1""",
-            (str(r["id"]),), fetch_one=True,
-        )
-
-        # Get symptom categories
-        categories = set()
-        if r["symptom_ids"]:
-            for sid in r["symptom_ids"][:5]:  # Limit to avoid excessive queries
-                s = query("SELECT category FROM symptoms WHERE id = %s", (sid,), fetch_one=True)
-                if s:
-                    categories.add(s["category"])
+    for r in (rows or []):
+        cats = set()
+        if r.get("symptom_ids"):
+            for sid in r["symptom_ids"][:5]:
+                if sid in sid_to_cat:
+                    cats.add(sid_to_cat[sid])
 
         analyses.append({
             "id": str(r["id"]),
@@ -677,11 +683,11 @@ def list_analyses():
             "user_name": r["user_name"],
             "user_email": r["user_email"],
             "symptom_count": len(r["symptom_ids"]) if r["symptom_ids"] else 0,
-            "categories": list(categories),
+            "categories": list(cats),
             "status": r.get("status", "completed"),
-            "result_count": result_count,
-            "top_disease": top_result["disease"] if top_result else None,
-            "top_confidence": float(top_result["confidence_pct"]) if top_result else None,
+            "result_count": int(r["result_count"] or 0),
+            "top_disease": r["top_disease"],
+            "top_confidence": float(r["top_confidence"]) if r["top_confidence"] is not None else None,
             "processing_time_ms": r.get("processing_time_ms"),
             "model_version": r.get("model_version"),
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
@@ -786,36 +792,38 @@ def list_reports():
     rows = query(
         f"""SELECT p.id, p.patient_name, p.patient_age, p.patient_gender,
                    p.created_at, p.status, p.model_version,
-                   COUNT(pr.id) as result_count
+                   COALESCE(pr_cnt.result_count, 0) as result_count,
+                   pr_top.risk_level,
+                   d.name as top_disease
            FROM predictions p
-           LEFT JOIN prediction_results pr ON pr.prediction_id = p.id
+           LEFT JOIN prediction_results pr_top ON pr_top.prediction_id = p.id AND pr_top.rank = 1
+           LEFT JOIN diseases d ON pr_top.disease_id = d.id
+           LEFT JOIN (
+               SELECT prediction_id, COUNT(*) as result_count
+               FROM prediction_results
+               GROUP BY prediction_id
+           ) pr_cnt ON pr_cnt.prediction_id = p.id
            {where_sql}
-           GROUP BY p.id
            ORDER BY p.created_at DESC
            LIMIT %s OFFSET %s""",
         params + [per_page, offset], fetch_all=True,
     )
 
-    reports = []
-    for r in rows:
-        top_result = query(
-            """SELECT d.name as disease, pr.confidence_pct, pr.risk_level
-               FROM prediction_results pr JOIN diseases d ON pr.disease_id = d.id
-               WHERE pr.prediction_id = %s ORDER BY pr.rank LIMIT 1""",
-            (str(r["id"]),), fetch_one=True,
-        )
-        reports.append({
+    reports = [
+        {
             "id": str(r["id"]),
             "patient_name": r["patient_name"],
             "patient_age": r["patient_age"],
             "patient_gender": r["patient_gender"],
-            "result_count": r["result_count"],
-            "top_disease": top_result["disease"] if top_result else None,
-            "risk_level": top_result["risk_level"] if top_result else None,
+            "result_count": int(r["result_count"] or 0),
+            "top_disease": r["top_disease"],
+            "risk_level": r["risk_level"],
             "status": r.get("status", "completed"),
             "model_version": r.get("model_version"),
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-        })
+        }
+        for r in (rows or [])
+    ]
 
     return jsonify({
         "reports": reports,

@@ -382,10 +382,36 @@ def generate_remedies_and_warnings(predictions: list) -> list:
     and verified remedies/warnings.
 
     Guarantees both `remedies`/`remedies_text` and `warning`/`warning_text` are present.
+    Executes multiple AI remedy requests in parallel rather than sequentially.
     """
     enriched = []
-    needed_remedies = []
 
+    # 1. Identify any minor conditions that need AI remedies and are not yet in cache
+    needed = []
+    for pred in predictions:
+        d = pred["disease"]
+        conf = float(pred.get("confidence", 0.0))
+        if is_minor_condition(d) and conf > 5:
+            ck = d.lower().strip()
+            with _CACHE_LOCK:
+                if ck not in _REMEDIES_CACHE:
+                    needed.append((ck, d, conf))
+
+    # 2. Fetch uncached remedies in parallel to eliminate sequential latency accumulation
+    if needed:
+        futures = {
+            ck: _EXECUTOR.submit(_fetch_gemini_remedies_with_deadline, d, conf, GEMINI_TIMEOUT_SECONDS)
+            for ck, d, conf in needed
+        }
+        for ck, f in futures.items():
+            try:
+                res = f.result(timeout=GEMINI_TIMEOUT_SECONDS + 0.2)
+            except Exception:
+                res = _get_clinical_fallback(ck)
+            with _CACHE_LOCK:
+                _REMEDIES_CACHE[ck] = res
+
+    # 3. Assemble enriched predictions
     for pred in predictions:
         disease = pred["disease"]
         confidence = float(pred.get("confidence", 0.0))
@@ -418,17 +444,9 @@ def generate_remedies_and_warnings(predictions: list) -> list:
         if is_minor_condition(disease) and confidence > 5:
             cache_key = disease.lower().strip()
             with _CACHE_LOCK:
-                cached = _REMEDIES_CACHE.get(cache_key)
-
-            if cached:
-                remedies_text = cached
-            else:
-                # Fetch fresh AI remedies within timeout; falls back to clinical library automatically
-                remedies_text = _fetch_gemini_remedies_with_deadline(
-                    disease, confidence, timeout_sec=GEMINI_TIMEOUT_SECONDS
-                )
-                with _CACHE_LOCK:
-                    _REMEDIES_CACHE[cache_key] = remedies_text
+                remedies_text = _REMEDIES_CACHE.get(cache_key)
+            if not remedies_text:
+                remedies_text = _get_clinical_fallback(disease)
 
         enriched.append({
             **pred,

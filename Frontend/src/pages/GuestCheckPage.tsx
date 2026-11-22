@@ -6,6 +6,7 @@ import {
   RefreshCw, CheckCircle2, ChevronRight, Brain
 } from 'lucide-react'
 import { getAllSymptoms, getGuestStatus, runGuestPrediction } from '../services/api'
+import { SYMPTOM_CATEGORIES } from '../data/symptoms'
 import type { Page, PredictionResponse, SelectedSymptom } from '../types'
 import { fadeUp, staggerContainer, staggerItem, buttonHover, buttonTap } from '../motion/variants'
 
@@ -13,6 +14,15 @@ interface GuestCheckPageProps {
   onNavigate: (page: Page) => void
   onOpenAuth: (mode: 'login' | 'register') => void
 }
+
+const INITIAL_SYMPTOMS = SYMPTOM_CATEGORIES.flatMap((cat, catIdx) =>
+  cat.symptoms.map((s, sIdx) => ({
+    id: catIdx * 100 + sIdx + 1,
+    key: s.key,
+    label: s.label,
+    category: cat.id,
+  }))
+)
 
 const POPULAR_SYMPTOMS = [
   { key: 'fever', label: 'Fever' },
@@ -37,7 +47,7 @@ export default function GuestCheckPage({ onNavigate, onOpenAuth }: GuestCheckPag
       return false
     }
   })
-  const [allSymptoms, setAllSymptoms] = useState<{ id: number; key: string; label: string; category: string }[]>([])
+  const [allSymptoms, setAllSymptoms] = useState<{ id: number; key: string; label: string; category: string }[]>(INITIAL_SYMPTOMS)
   const [search, setSearch] = useState('')
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([])
   const [age, setAge] = useState('30')

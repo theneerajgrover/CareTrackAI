@@ -147,6 +147,38 @@
   width: 320px;
 }
 
+.admin-header-bell-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.admin-header-bell-btn:hover {
+  background: var(--color-secondary);
+  color: var(--color-foreground);
+  border-color: var(--color-border);
+}
+
+.admin-header-bell-btn:active {
+  background: #e2e8f0;
+  transform: translateY(1px);
+}
+
+.admin-header-bell-btn:focus-visible {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+}
+
 .admin-header-profile {
   display: flex;
   align-items: center;
