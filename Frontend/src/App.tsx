@@ -131,11 +131,18 @@ function resolveRoute(isAdmin: boolean, isPatient: boolean): Page {
   if (hash.includes('/admin/login') || hash.startsWith('#/admin') || path.includes('/admin')) {
     return 'admin-login'
   }
-  if (hash.startsWith('#/patient') || path.includes('/patient')) {
+  // Allow public and guest clinical health assessment wizard
+  if (hash.includes('patient-details') || hash.includes('/patient/details')) return 'patient-details'
+  if (hash.includes('symptom-categories')) return 'symptom-categories'
+  if (hash.includes('symptom-subcategory')) return 'symptom-subcategory'
+  if (hash.includes('review')) return 'review'
+  if (hash.includes('analyzing')) return 'analyzing'
+  if (hash.includes('report')) return 'report'
+  if (hash.includes('guest-check')) return 'guest-check'
+
+  // Dedicated patient portal workspaces require authentication
+  if (hash.startsWith('#/patient/') || hash === '#/patient') {
     return 'auth'
-  }
-  if (hash.includes('guest-check')) {
-    return 'guest-check'
   }
   if (hash.includes('auth') || hash.includes('login') || hash.includes('signin')) {
     return 'auth'
@@ -147,12 +154,6 @@ function resolveRoute(isAdmin: boolean, isPatient: boolean): Page {
   if (hash.includes('health-analysis')) return 'health-analysis'
   if (hash.includes('about')) return 'about'
   if (hash.includes('contact')) return 'contact'
-  if (hash.includes('patient-details') || hash.includes('/patient/details')) return 'patient-details'
-  if (hash.includes('symptom-categories')) return 'symptom-categories'
-  if (hash.includes('symptom-subcategory')) return 'symptom-subcategory'
-  if (hash.includes('review')) return 'review'
-  if (hash.includes('analyzing')) return 'analyzing'
-  if (hash.includes('report')) return 'report'
 
   // Default public view is ALWAYS public home
   return 'home'
