@@ -15,7 +15,9 @@ Produces sharp, selectable-text, high-resolution clinical reports with:
 """
 
 import io
-from datetime import datetime
+import re
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Dict, Any, List, Optional
 
 from reportlab.lib.pagesizes import A4
@@ -37,6 +39,62 @@ from gemini_service import get_doctor_specialty
 
 # -- Canonical Configuration ----------------------------------------------------
 CANONICAL_WEBSITE_URL = "https://theneerajgrover.github.io/CareTrackAI/"
+IST_TIMEZONE = ZoneInfo("Asia/Kolkata")
+
+
+def sanitize_report_filename(patient_name: Optional[str]) -> str:
+    """
+    Format: patient_name_caretrack_report.pdf
+    Lowercase, alphanumeric and underscores only, normalized underscores, no UUIDs.
+    Fallback: patient_caretrack_report.pdf
+    """
+    if not patient_name:
+        return "patient_caretrack_report.pdf"
+    clean = re.sub(r"[^a-zA-Z0-9]+", "_", str(patient_name).strip().lower())
+    clean = re.sub(r"_+", "_", clean).strip("_")
+    return f"{clean}_caretrack_report.pdf" if clean else "patient_caretrack_report.pdf"
+
+
+def format_assessment_datetime(raw_date: Any) -> str:
+    """
+    Interprets the persisted assessment timestamp from Supabase PostgreSQL (UTC)
+    and converts it accurately to Asia/Kolkata (IST).
+    Display format: '23 November 2026 | 01:57 PM'
+    Never uses current server or download time.
+    Returns 'Assessment time unavailable' if missing or unparseable.
+    """
+    if not raw_date:
+        return "Assessment time unavailable"
+
+    dt: Optional[datetime] = None
+
+    if isinstance(raw_date, datetime):
+        dt = raw_date
+    elif isinstance(raw_date, str):
+        cleaned = raw_date.strip()
+        if not cleaned:
+            return "Assessment time unavailable"
+        try:
+            iso_str = cleaned.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(iso_str)
+        except Exception:
+            for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+                try:
+                    dt = datetime.strptime(cleaned, fmt)
+                    break
+                except Exception:
+                    pass
+
+    if dt is None:
+        return "Assessment time unavailable"
+
+    # Supabase PostgreSQL TIMESTAMP without time zone stores UTC
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    # Convert to Asia/Kolkata
+    dt_ist = dt.astimezone(IST_TIMEZONE)
+    return dt_ist.strftime("%d %B %Y | %I:%M %p")
 
 # Colors
 COLOR_PRIMARY = HexColor("#4338CA")       # Indigo accent
@@ -110,23 +168,19 @@ class NumberedCanvas(canvas.Canvas):
         self.saveState()
         page_w, page_h = A4
         margin_x = 36.0
-        footer_y = 22.0
+        footer_y = 20.0
 
         # Separator rule
         self.setStrokeColor(COLOR_BORDER)
-        self.setLineWidth(0.75)
+        self.setLineWidth(0.6)
         self.line(margin_x, footer_y + 14.0, page_w - margin_x, footer_y + 14.0)
 
-        # Left: Copyright & confidentiality notice
+        # 1. LEFT SECTION: © CareTrackAI
         self.setFont("Helvetica-Bold", 7.5)
         self.setFillColor(COLOR_TEXT_MAIN)
         self.drawString(margin_x, footer_y, "© CareTrackAI")
 
-        self.setFont("Helvetica", 7.0)
-        self.setFillColor(COLOR_TEXT_LIGHT)
-        self.drawString(margin_x + 65.0, footer_y, "·  Confidential Medical Assessment Report")
-
-        # Center: Exact canonical website link
+        # 2. CENTER SECTION: Exact canonical website link
         url_text = CANONICAL_WEBSITE_URL
         self.setFont("Helvetica-Bold", 7.5)
         self.setFillColor(COLOR_PRIMARY)
@@ -134,7 +188,7 @@ class NumberedCanvas(canvas.Canvas):
         url_x = (page_w - url_width) / 2.0
         self.drawString(url_x, footer_y, url_text)
 
-        # Right: Page X of Y
+        # 3. RIGHT SECTION: Page X of Y
         page_str = f"Page {self._pageNumber} of {total_pages}"
         self.setFont("Helvetica-Bold", 7.5)
         self.setFillColor(COLOR_TEXT_MUTED)
@@ -265,31 +319,22 @@ def generate_medical_report_pdf(report_data: Dict[str, Any]) -> bytes:
     # ── 1. Document Header & Reference Meta ──────────────────────────────────────
     logo_drawing = create_vector_logo(width=175.0, height=34.0)
 
-    # Date formatting
+    # Date formatting: actual assessment time in Asia/Kolkata
     raw_date = report_data.get("created_at")
-    date_str = "Recent"
-    if raw_date:
-        if isinstance(raw_date, str):
-            try:
-                dt = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
-                date_str = dt.strftime("%b %d, %Y · %I:%M %p")
-            except Exception:
-                date_str = str(raw_date)[:19]
-        elif isinstance(raw_date, datetime):
-            date_str = raw_date.strftime("%b %d, %Y · %I:%M %p")
+    date_str = format_assessment_datetime(raw_date)
 
     pred_id = str(report_data.get("id") or report_data.get("prediction_id") or "UNKNOWN")
     short_ref = pred_id[:8].upper()
 
     meta_content = [
         Paragraph(f"<b>REPORT REF:</b> CTR-{short_ref}", style_label),
-        Paragraph(f"<b>DATE:</b> {date_str}", style_label),
+        Paragraph(f"<b>ASSESSMENT DATE &amp; TIME:</b> {date_str}", style_label),
         Paragraph("<b>ENGINE:</b> Gaussian Naive Bayes (v1.0)", style_label),
     ]
 
     header_table = Table(
         [[logo_drawing, meta_content]],
-        colWidths=[printable_width * 0.55, printable_width * 0.45],
+        colWidths=[printable_width * 0.44, printable_width * 0.56],
     )
     header_table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),

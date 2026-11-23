@@ -6,7 +6,7 @@ import {
   CheckCircle2, ChevronDown, ChevronUp, Clock, FileText, Printer, Check, Download, RefreshCw
 } from 'lucide-react'
 import { fadeUp, staggerContainer, staggerItem, buttonHover, buttonTap } from '../motion/variants'
-import { downloadPredictionPdf } from '../services/api'
+import { downloadPredictionPdf, formatPatientReportFilename } from '../services/api'
 import type { PatientDetails, SelectedSymptom, Page, PredictionResponse } from '../types'
 
 interface ReportPageProps {
@@ -47,7 +47,7 @@ export default function ReportPage({
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `CareTrack_Report_${predictionId.slice(0, 8)}.pdf`
+      a.download = formatPatientReportFilename(patientDetails?.name)
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)

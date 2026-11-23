@@ -4,7 +4,7 @@ import {
   AlertCircle, Sparkles, ShieldCheck, CheckCircle2,
   Calendar, FileCheck, ArrowRight, X, ExternalLink
 } from 'lucide-react'
-import { getUserReports, downloadPredictionPdf } from '../../services/api'
+import { getUserReports, downloadPredictionPdf, formatPatientReportFilename } from '../../services/api'
 import type { ClinicalReportItem } from '../../types'
 
 interface Props {
@@ -88,7 +88,7 @@ export default function PatientReportsPage({ onStartHealthCheck }: Props) {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `CareTrack_Report_${doc.prediction_id.slice(0, 8)}.pdf`
+      a.download = formatPatientReportFilename(doc.patient_name)
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -471,7 +471,7 @@ export default function PatientReportsPage({ onStartHealthCheck }: Props) {
                     {previewDoc.title}
                   </h3>
                   <span className="text-[10px] text-muted-foreground font-mono block">
-                    CareTrack_Report_{previewDoc.prediction_id.slice(0, 8)}.pdf · Vector A4 Format
+                    {formatPatientReportFilename(previewDoc.patient_name)} · Vector A4 Format
                   </span>
                 </div>
               </div>

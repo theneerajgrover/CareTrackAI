@@ -287,7 +287,7 @@ def test_pdf_endpoint_owner_success(client):
         assert res.status_code == 200
         assert res.mimetype == "application/pdf"
         assert res.data.startswith(b"%PDF-")
-        assert f'filename="CareTrack_Report_{pred_id[:8]}.pdf"' in res.headers.get("Content-Disposition", "")
+        assert 'filename="authorized_owner_patient_caretrack_report.pdf"' in res.headers.get("Content-Disposition", "")
     finally:
         execute("DELETE FROM prediction_results WHERE prediction_id = %s", (pred_id,))
         execute("DELETE FROM predictions WHERE id = %s", (pred_id,))
@@ -365,3 +365,63 @@ def test_pdf_endpoint_guest_access(client):
     finally:
         execute("DELETE FROM guest_usage WHERE guest_id = %s", (guest_id,))
         execute("DELETE FROM predictions WHERE id = %s", (pred_id,))
+
+
+def test_sanitize_report_filename():
+    """Verify filename sanitization strictly produces patient_name_caretrack_report.pdf."""
+    assert pdf_service.sanitize_report_filename("Neeraj Grover") == "neeraj_grover_caretrack_report.pdf"
+    assert pdf_service.sanitize_report_filename("Alex Morgan") == "alex_morgan_caretrack_report.pdf"
+    assert pdf_service.sanitize_report_filename("John   Smith!") == "john_smith_caretrack_report.pdf"
+    assert pdf_service.sanitize_report_filename("Dr. John-Paul O'Connor") == "dr_john_paul_o_connor_caretrack_report.pdf"
+    assert pdf_service.sanitize_report_filename("") == "patient_caretrack_report.pdf"
+    assert pdf_service.sanitize_report_filename(None) == "patient_caretrack_report.pdf"
+    assert pdf_service.sanitize_report_filename("___") == "patient_caretrack_report.pdf"
+
+
+def test_format_assessment_datetime():
+    """Verify timestamp parsing and conversion to Asia/Kolkata (IST)."""
+    # 23 Nov 2026 08:27:00 UTC -> 01:57 PM IST
+    dt_str = "2026-11-23T08:27:00Z"
+    formatted = pdf_service.format_assessment_datetime(dt_str)
+    assert formatted == "23 November 2026 | 01:57 PM"
+
+    # Datetime object (UTC naive -> IST)
+    dt_obj = datetime(2026, 11, 23, 8, 27, 0)
+    assert pdf_service.format_assessment_datetime(dt_obj) == "23 November 2026 | 01:57 PM"
+
+    # Missing & invalid fallbacks (never fabricates current time)
+    assert pdf_service.format_assessment_datetime(None) == "Assessment time unavailable"
+    assert pdf_service.format_assessment_datetime("") == "Assessment time unavailable"
+    assert pdf_service.format_assessment_datetime("invalid") == "Assessment time unavailable"
+
+
+def test_footer_horizontal_layout_no_overlap():
+    """Verify mathematical bounds of 3 footer sections prove zero horizontal overlap on A4."""
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    import io
+
+    c = canvas.Canvas(io.BytesIO(), pagesize=A4)
+    page_w, page_h = A4
+    margin_x = 36.0
+
+    left_text = "© CareTrackAI"
+    left_w = c.stringWidth(left_text, "Helvetica-Bold", 7.5)
+    left_end_x = margin_x + left_w
+
+    url_text = pdf_service.CANONICAL_WEBSITE_URL
+    url_w = c.stringWidth(url_text, "Helvetica-Bold", 7.5)
+    center_start_x = (page_w - url_w) / 2.0
+    center_end_x = center_start_x + url_w
+
+    page_str = "Page 1 of 1"
+    page_w_str = c.stringWidth(page_str, "Helvetica-Bold", 7.5)
+    right_start_x = (page_w - margin_x) - page_w_str
+
+    # Left section ends well before center starts (at least 80 pt clearance)
+    gap_left_center = center_start_x - left_end_x
+    assert gap_left_center >= 80.0, f"Left-to-center gap too small: {gap_left_center} pt"
+
+    # Center section ends well before right section starts (at least 80 pt clearance)
+    gap_center_right = right_start_x - center_end_x
+    assert gap_center_right >= 80.0, f"Center-to-right gap too small: {gap_center_right} pt"

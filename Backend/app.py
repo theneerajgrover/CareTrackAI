@@ -34,7 +34,7 @@ from predict import predict_disease, get_model_info, get_available_symptoms, _lo
 from database import query, execute, execute_returning, execute_transaction, execute_values
 from gemini_service import generate_remedies_and_warnings, classify_risk, get_doctor_specialty, _get_client
 from symptom_mapper import FRONTEND_TO_DATASET
-from pdf_service import generate_medical_report_pdf
+from pdf_service import generate_medical_report_pdf, sanitize_report_filename
 
 load_dotenv()
 
@@ -1038,8 +1038,11 @@ def get_prediction_pdf(prediction_id):
     except Exception as e:
         return jsonify({"error": f"Failed to generate PDF report: {str(e)}"}), 500
 
+    patient_name = pred.get("patient_name")
+    filename = sanitize_report_filename(patient_name)
+
     response = Response(pdf_bytes, mimetype="application/pdf")
-    response.headers["Content-Disposition"] = f'attachment; filename="CareTrack_Report_{str(pred["id"])[:8]}.pdf"'
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
     response.headers["Content-Type"] = "application/pdf"
     response.headers["Cache-Control"] = "private, no-cache, no-store, must-revalidate"
     return response

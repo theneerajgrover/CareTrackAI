@@ -267,6 +267,17 @@ export async function getPredictionDetails(id: string): Promise<any> {
   })
 }
 
+export function formatPatientReportFilename(patientName?: string | null): string {
+  if (!patientName) return 'patient_caretrack_report.pdf'
+  const clean = patientName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  return clean ? `${clean}_caretrack_report.pdf` : 'patient_caretrack_report.pdf'
+}
+
 export async function downloadPredictionPdf(predictionId: string): Promise<Blob> {
   const token = getAccessToken()
   const headers: Record<string, string> = {}
