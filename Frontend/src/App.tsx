@@ -106,8 +106,7 @@ function resolveRoute(isAdmin: boolean, isPatient: boolean): Page {
   // 2. Authenticated Patient: Default is Patient Dashboard; allow clinical assessment flow & info pages
   if (isPatient) {
     if (hash.includes('/patient/chatbot')) return 'patient-chatbot'
-    if (hash.includes('/patient/analyses')) return 'patient-analyses'
-    if (hash.includes('/patient/reports')) return 'patient-reports'
+    if (hash.includes('/patient/analyses') || hash.includes('/patient/reports')) return 'patient-analyses'
     if (hash.includes('/patient/symptoms')) return 'patient-symptoms'
     if (hash.includes('/patient/recommendations')) return 'patient-recommendations'
     if (hash.includes('/patient/notifications')) return 'patient-notifications'

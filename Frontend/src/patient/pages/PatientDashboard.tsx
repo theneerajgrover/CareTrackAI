@@ -99,7 +99,7 @@ export default function PatientDashboard({
           <div className="patient-stat-card-sub">Completed health assessments</div>
         </div>
 
-        <div className="patient-stat-card" onClick={() => onNavigate('patient-reports')} style={{ cursor: 'pointer' }}>
+        <div className="patient-stat-card" onClick={() => onNavigate('patient-analyses')} style={{ cursor: 'pointer' }}>
           <div className="patient-stat-card-header">
             <span className="patient-stat-card-label">Available Reports</span>
             <div className="patient-stat-card-icon" style={{ background: 'rgba(5,150,105,0.08)' }}>
@@ -109,7 +109,7 @@ export default function PatientDashboard({
           <div className="patient-stat-card-value">
             {loading ? <span style={{ display: 'inline-block', width: 36, height: 24, borderRadius: 6, background: '#e2e8f0', animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite' }} /> : (stats?.total_reports ?? 0)}
           </div>
-          <div className="patient-stat-card-sub">Clinical reports on file</div>
+          <div className="patient-stat-card-sub">Clinical reports in My Analyses</div>
         </div>
 
         <div className="patient-stat-card" onClick={() => onNavigate('patient-analyses')} style={{ cursor: 'pointer' }}>
@@ -154,10 +154,10 @@ export default function PatientDashboard({
         <div className="patient-shortcuts-grid">
           {[
             { id: 'patient-chatbot' as PatientPage, label: 'Medical Assistant', icon: Bot, desc: 'AI Health Chatbot' },
-            { id: 'patient-analyses' as PatientPage, label: 'My Analyses', icon: Activity, desc: 'View past evaluations' },
-            { id: 'patient-reports' as PatientPage, label: 'Medical Reports', icon: FileText, desc: 'Clinical documentation' },
+            { id: 'patient-analyses' as PatientPage, label: 'My Analyses', icon: Activity, desc: 'Evaluations & PDF reports' },
             { id: 'patient-symptoms' as PatientPage, label: 'Symptom Library', icon: Stethoscope, desc: '377 health signals' },
             { id: 'patient-recommendations' as PatientPage, label: 'Clinical Guidance', icon: ShieldCheck, desc: 'Doctor & home remedies' },
+            { id: 'patient-notifications' as PatientPage, label: 'Notifications', icon: Bell, desc: 'Health alerts & updates' },
             { id: 'patient-feedback' as PatientPage, label: 'Feedback', icon: MessageSquare, desc: 'Contact care team' },
           ].map((q) => (
             <button

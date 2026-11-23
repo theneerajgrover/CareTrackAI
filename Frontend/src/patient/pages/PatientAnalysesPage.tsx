@@ -3,9 +3,9 @@ import {
   Activity, Calendar, ArrowRight, Search, RefreshCw, AlertCircle,
   Sparkles, ShieldCheck, Stethoscope, Clock, CheckCircle2, ChevronRight,
   SlidersHorizontal, X, ArrowUpDown, GitCompare, HeartPulse, User,
-  AlertTriangle, Info
+  AlertTriangle, Info, Download, Printer, FileText, Eye
 } from 'lucide-react'
-import { getPredictionHistory, getPredictionDetails } from '../../services/api'
+import { getPredictionHistory, getPredictionDetails, downloadPredictionPdf, formatPatientReportFilename } from '../../services/api'
 import type { HistoryItem, PredictionResponse, PatientDetails, SelectedSymptom } from '../../types'
 
 interface Props {
@@ -31,9 +31,24 @@ export default function PatientAnalysesPage({ onStartHealthCheck, onOpenReportBy
   const [activeAnalysisDetail, setActiveAnalysisDetail] = useState<any | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
 
+  // PDF Preview and Direct Action State
+  const [previewItem, setPreviewItem] = useState<HistoryItem | null>(null)
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null)
+  const [loadingPreview, setLoadingPreview] = useState(false)
+  const [actionInProgress, setActionInProgress] = useState<string | null>(null)
+
   useEffect(() => {
     loadAnalyses()
   }, [])
+
+  // Cleanup blob URL when preview modal closes
+  useEffect(() => {
+    return () => {
+      if (previewBlobUrl) {
+        URL.revokeObjectURL(previewBlobUrl)
+      }
+    }
+  }, [previewBlobUrl])
 
   async function loadAnalyses() {
     setLoading(true)
@@ -45,6 +60,79 @@ export default function PatientAnalysesPage({ onStartHealthCheck, onOpenReportBy
       setError(err.message || 'Failed to load analyses.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Handle PDF Preview in Modal
+  async function handlePreviewPdf(item: HistoryItem) {
+    if (previewBlobUrl) {
+      URL.revokeObjectURL(previewBlobUrl)
+      setPreviewBlobUrl(null)
+    }
+    setPreviewItem(item)
+    setLoadingPreview(true)
+    try {
+      const blob = await downloadPredictionPdf(item.id)
+      const url = URL.createObjectURL(blob)
+      setPreviewBlobUrl(url)
+    } catch (err: any) {
+      setError(err.message || 'Failed to load document preview.')
+      setPreviewItem(null)
+    } finally {
+      setLoadingPreview(false)
+    }
+  }
+
+  function handleClosePreview() {
+    if (previewBlobUrl) {
+      URL.revokeObjectURL(previewBlobUrl)
+      setPreviewBlobUrl(null)
+    }
+    setPreviewItem(null)
+  }
+
+  // Handle Direct Authenticated PDF Download
+  async function handleDownloadPdf(item: HistoryItem) {
+    setActionInProgress(`download-${item.id}`)
+    try {
+      const blob = await downloadPredictionPdf(item.id)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = formatPatientReportFilename(item.patient_name || 'patient')
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      setError(err.message || 'Failed to download report PDF.')
+    } finally {
+      setActionInProgress(null)
+    }
+  }
+
+  // Handle Direct Document Print via Hidden Iframe
+  async function handlePrintPdf(item: HistoryItem) {
+    setActionInProgress(`print-${item.id}`)
+    try {
+      const blob = await downloadPredictionPdf(item.id)
+      const url = URL.createObjectURL(blob)
+      const iframe = document.createElement('iframe')
+      iframe.style.display = 'none'
+      iframe.src = url
+      document.body.appendChild(iframe)
+      iframe.onload = () => {
+        iframe.contentWindow?.focus()
+        iframe.contentWindow?.print()
+        setTimeout(() => {
+          document.body.removeChild(iframe)
+          URL.revokeObjectURL(url)
+        }, 1000)
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to prepare document for printing.')
+    } finally {
+      setActionInProgress(null)
     }
   }
 
@@ -469,14 +557,52 @@ export default function PatientAnalysesPage({ onStartHealthCheck, onOpenReportBy
 
                       {/* Actions */}
                       <td className="py-3 px-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleInspectAnalysis(item.id)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/10 hover:bg-accent text-accent hover:text-white font-semibold text-[11px] transition-all cursor-pointer"
-                        >
-                          <span>View Analysis</span>
-                          <ChevronRight size={12} />
-                        </button>
+                        <div className="inline-flex items-center justify-end gap-1.5 whitespace-nowrap">
+                          {/* Inspect analysis modal */}
+                          <button
+                            type="button"
+                            onClick={() => handleInspectAnalysis(item.id)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/10 hover:bg-accent text-accent hover:text-white font-semibold text-[11px] transition-all cursor-pointer"
+                            title="Inspect Analytical Findings"
+                          >
+                            <span>Analysis</span>
+                            <ChevronRight size={12} />
+                          </button>
+
+                          {/* Preview PDF */}
+                          <button
+                            type="button"
+                            onClick={() => handlePreviewPdf(item)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-border hover:bg-secondary text-foreground text-[11px] font-semibold transition-all cursor-pointer"
+                            title="Preview Vector PDF Report"
+                          >
+                            <Eye size={12} />
+                            <span className="hidden sm:inline">Preview</span>
+                          </button>
+
+                          {/* Download PDF */}
+                          <button
+                            type="button"
+                            disabled={actionInProgress === `download-${item.id}`}
+                            onClick={() => handleDownloadPdf(item)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-accent hover:bg-accent-hover text-white text-[11px] font-semibold shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                            title="Download Vector PDF Report"
+                          >
+                            <Download size={12} className={actionInProgress === `download-${item.id}` ? 'animate-bounce' : ''} />
+                            <span>PDF</span>
+                          </button>
+
+                          {/* Print PDF */}
+                          <button
+                            type="button"
+                            disabled={actionInProgress === `print-${item.id}`}
+                            onClick={() => handlePrintPdf(item)}
+                            className="p-1 rounded-lg border border-border hover:bg-secondary text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+                            title="Print Official Medical Report"
+                          >
+                            <Printer size={13} className={actionInProgress === `print-${item.id}` ? 'animate-spin' : ''} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -615,14 +741,73 @@ export default function PatientAnalysesPage({ onStartHealthCheck, onOpenReportBy
             )}
 
             {/* Footer Actions */}
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-3 border-t border-border">
               <button
                 type="button"
-                onClick={() => setActiveAnalysisDetail(null)}
-                className="px-4 py-2 rounded-xl border border-border bg-card text-foreground font-semibold text-xs hover:bg-secondary"
+                onClick={() => {
+                  const id = activeAnalysisDetail.id
+                  setActiveAnalysisDetail(null)
+                  onOpenReportById(id)
+                }}
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent text-white font-semibold text-xs shadow-xs hover:bg-accent-hover transition-all cursor-pointer"
               >
-                Close Details
+                <span>View Full Diagnostic Report</span>
+                <ChevronRight size={13} />
               </button>
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const fakeItem: HistoryItem = {
+                      id: activeAnalysisDetail.id,
+                      patient_name: activeAnalysisDetail.patient?.name || 'patient',
+                      top_disease: activeAnalysisDetail.results?.[0]?.disease || '',
+                      top_confidence: activeAnalysisDetail.results?.[0]?.confidence || 0,
+                      num_findings: activeAnalysisDetail.results?.length || 1,
+                      risk_level: activeAnalysisDetail.results?.[0]?.risk_level || 'low',
+                      created_at: activeAnalysisDetail.created_at || '',
+                      symptom_ids: activeAnalysisDetail.symptoms?.map((s: any) => s.key || s.id) || [],
+                    }
+                    handlePreviewPdf(fakeItem)
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-border bg-card text-foreground font-semibold text-xs hover:bg-secondary transition-all cursor-pointer"
+                  title="Preview Vector PDF"
+                >
+                  <Eye size={13} />
+                  <span>Preview PDF</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const fakeItem: HistoryItem = {
+                      id: activeAnalysisDetail.id,
+                      patient_name: activeAnalysisDetail.patient?.name || 'patient',
+                      top_disease: activeAnalysisDetail.results?.[0]?.disease || '',
+                      top_confidence: activeAnalysisDetail.results?.[0]?.confidence || 0,
+                      num_findings: activeAnalysisDetail.results?.length || 1,
+                      risk_level: activeAnalysisDetail.results?.[0]?.risk_level || 'low',
+                      created_at: activeAnalysisDetail.created_at || '',
+                      symptom_ids: activeAnalysisDetail.symptoms?.map((s: any) => s.key || s.id) || [],
+                    }
+                    handleDownloadPdf(fakeItem)
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-accent text-white font-semibold text-xs shadow-xs hover:bg-accent-hover transition-all cursor-pointer"
+                  title="Download Vector PDF Report"
+                >
+                  <Download size={13} />
+                  <span>Download</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveAnalysisDetail(null)}
+                  className="px-3.5 py-2 rounded-xl border border-border bg-card text-foreground font-semibold text-xs hover:bg-secondary cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -756,6 +941,83 @@ export default function PatientAnalysesPage({ onStartHealthCheck, onOpenReportBy
               >
                 Close Comparison
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Document PDF Preview Modal ── */}
+      {previewItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={handleClosePreview}
+          />
+
+          <div className="relative w-full max-w-4xl bg-card border border-border rounded-2xl shadow-2xl p-5 z-10 flex flex-col h-[88vh] animate-in fade-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3.5 border-b border-border flex-shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-red-500/10 text-red-600 flex items-center justify-center flex-shrink-0 border border-red-500/20">
+                  <FileText size={16} />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-foreground text-sm truncate">
+                    {previewItem.top_disease ? previewItem.top_disease.replace(/_/g, ' ') : 'Health Assessment Clinical Report'}
+                  </h3>
+                  <span className="text-[10px] text-muted-foreground font-mono block">
+                    {formatPatientReportFilename(previewItem.patient_name || 'patient')} · Vector A4 Format
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadPdf(previewItem)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white font-semibold text-xs shadow-xs hover:bg-accent-hover transition-all cursor-pointer"
+                >
+                  <Download size={13} />
+                  <span>Download</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePrintPdf(previewItem)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-foreground font-semibold text-xs hover:bg-secondary transition-all cursor-pointer"
+                >
+                  <Printer size={13} />
+                  <span>Print</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClosePreview}
+                  className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Document Preview Canvas */}
+            <div className="flex-1 min-h-0 bg-secondary/30 rounded-xl mt-3 p-1 flex items-center justify-center overflow-hidden border border-border/70">
+              {loadingPreview ? (
+                <div className="text-center py-20">
+                  <RefreshCw size={28} className="animate-spin text-accent mx-auto mb-3" />
+                  <p className="text-xs font-semibold text-muted-foreground">
+                    Generating high-resolution vector PDF preview...
+                  </p>
+                </div>
+              ) : previewBlobUrl ? (
+                <iframe
+                  src={previewBlobUrl}
+                  title="PDF Report Preview"
+                  className="w-full h-full rounded-lg border-0 bg-white shadow-inner"
+                />
+              ) : (
+                <div className="text-center py-12 text-muted-foreground text-xs">
+                  Unable to load PDF preview. Use the Download button above to view the file.
+                </div>
+              )}
             </div>
           </div>
         </div>

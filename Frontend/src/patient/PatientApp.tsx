@@ -7,7 +7,6 @@ import {
 import type { PatientPage, User, Page, PredictionResponse, PatientDetails, SelectedSymptom } from '../types'
 import PatientDashboard from './pages/PatientDashboard'
 import PatientAnalysesPage from './pages/PatientAnalysesPage'
-import PatientReportsPage from './pages/PatientReportsPage'
 import PatientSymptomsPage from './pages/PatientSymptomsPage'
 import PatientRecommendationsPage from './pages/PatientRecommendationsPage'
 import PatientNotificationsPage from './pages/PatientNotificationsPage'
@@ -37,7 +36,6 @@ const SIDEBAR_ITEMS = [
   { id: 'patient-dashboard' as PatientPage, label: 'Dashboard', icon: LayoutDashboard },
   { id: 'patient-chatbot' as PatientPage, label: 'Medical Assistant', icon: Bot },
   { id: 'patient-analyses' as PatientPage, label: 'My Analyses', icon: Activity },
-  { id: 'patient-reports' as PatientPage, label: 'Reports', icon: FileText },
   { id: 'patient-symptoms' as PatientPage, label: 'Symptoms', icon: Stethoscope },
   { id: 'patient-recommendations' as PatientPage, label: 'Recommendations', icon: ShieldCheck },
   { id: 'patient-notifications' as PatientPage, label: 'Notifications', icon: Bell },
@@ -49,7 +47,6 @@ const PAGE_TITLES: Record<string, string> = {
   'patient-dashboard': 'Personal Health Dashboard',
   'patient-chatbot': 'Medical Assistance Chatbot',
   'patient-analyses': 'My Health Analyses',
-  'patient-reports': 'Clinical Health Reports',
   'patient-symptoms': 'Symptom Library',
   'patient-recommendations': 'Clinical Recommendations',
   'patient-notifications': 'Notifications & Health Alerts',
@@ -303,14 +300,8 @@ export default function PatientApp({
           {page === 'patient-chatbot' && (
             <PatientChatbotPage user={user} />
           )}
-          {page === 'patient-analyses' && (
+          {(page === 'patient-analyses' || (page as string) === 'patient-reports') && (
             <PatientAnalysesPage
-              onStartHealthCheck={onStartHealthCheck}
-              onOpenReportById={handleOpenReportById}
-            />
-          )}
-          {page === 'patient-reports' && (
-            <PatientReportsPage
               onStartHealthCheck={onStartHealthCheck}
               onOpenReportById={handleOpenReportById}
             />
