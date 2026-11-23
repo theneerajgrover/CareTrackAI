@@ -138,9 +138,10 @@ export default function PatientApp({
   }
 
   const patientInitial = (user?.name || 'P').charAt(0).toUpperCase()
+  const isChatbot = page === 'patient-chatbot'
 
   return (
-    <div className="patient-layout">
+    <div className={`patient-layout ${isChatbot ? 'patient-layout-viewport-locked' : ''}`}>
       {/* Mobile Drawer Overlay */}
       <div
         className={`patient-sidebar-overlay ${sidebarOpen ? 'open' : ''}`}
@@ -217,7 +218,7 @@ export default function PatientApp({
       </aside>
 
       {/* Main Content Area */}
-      <main className="patient-main">
+      <main className={`patient-main ${isChatbot ? 'patient-main-viewport-locked' : ''}`}>
         {/* Sticky Top Header */}
         <header className="patient-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -290,7 +291,7 @@ export default function PatientApp({
         </header>
 
         {/* Page Content Body */}
-        <div className="patient-content">
+        <div className={`patient-content ${isChatbot ? 'patient-content-chatbot' : ''}`}>
           {page === 'patient-dashboard' && (
             <PatientDashboard
               user={user}

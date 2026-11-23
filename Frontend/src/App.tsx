@@ -342,7 +342,7 @@ export default function App() {
   const showNavbar = !NO_NAVBAR_PAGES.includes(page)
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className={`${page === 'patient-chatbot' ? 'h-screen h-[100dvh] overflow-hidden' : 'min-h-screen'} bg-background text-foreground`}>
       {showNavbar && (
         <Navbar
           currentPage={page}

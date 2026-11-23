@@ -8,6 +8,15 @@
   color: var(--color-foreground, #0f172a);
 }
 
+.patient-layout.patient-layout-viewport-locked {
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* ── Fixed Sidebar ──────────────────────────────────────────────────────────── */
 .patient-sidebar {
   width: 260px;
@@ -109,6 +118,17 @@
   margin-left: 260px;
   min-height: 100vh;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.patient-main.patient-main-viewport-locked {
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -283,6 +303,49 @@
 .patient-content {
   padding: 24px;
   flex: 1;
+}
+
+.patient-content.patient-content-chatbot {
+  padding: 14px 20px 14px;
+  flex: 1;
+  min-height: 0;
+  height: calc(100vh - 60px);
+  height: calc(100dvh - 60px);
+  max-height: calc(100vh - 60px);
+  max-height: calc(100dvh - 60px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 768px) {
+  .patient-content.patient-content-chatbot {
+    padding: 10px 12px 10px;
+  }
+}
+
+/* ── Chat Custom Scrollbar & Utilities ─────────────────────────────────────── */
+.chat-custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+}
+
+.chat-custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.chat-custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
+}
+
+.chat-custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.65);
 }
 
 .patient-page-header {
