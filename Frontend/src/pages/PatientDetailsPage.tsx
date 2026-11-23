@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, ArrowLeft, Activity, User, Heart, Scale, Ruler, Droplets } from 'lucide-react'
-import { fadeUp, buttonHover, buttonTap } from '../motion/variants'
+import { ArrowRight, ArrowLeft, User, Ruler, Scale, Droplets, Calendar, Heart, Check } from 'lucide-react'
+import { fadeUp, staggerContainer, staggerItem, buttonHover, buttonTap } from '../motion/variants'
 import type { PatientDetails, Page } from '../types'
+import '../styles/assessment.css'
 
 interface PatientDetailsPageProps {
   details: PatientDetails
@@ -11,6 +12,13 @@ interface PatientDetailsPageProps {
 }
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-', 'Unknown']
+
+const STEPS = [
+  { num: 1, label: 'Vitals' },
+  { num: 2, label: 'Symptoms' },
+  { num: 3, label: 'Review' },
+  { num: 4, label: 'Analysis' },
+]
 
 export default function PatientDetailsPage({ details, onSave, onNavigate }: PatientDetailsPageProps) {
   const [form, setForm] = useState<PatientDetails>({
@@ -54,170 +62,194 @@ export default function PatientDetailsPage({ details, onSave, onNavigate }: Pati
     }
   }
 
-  const inputClass = (hasError?: boolean) =>
-    `w-full h-11 px-3.5 rounded-xl border text-[13px] text-foreground bg-card placeholder:text-muted-foreground focus:outline-none focus:ring-2 transition-all ${
-      hasError ? 'border-critical focus:ring-critical/30' : 'border-border focus:ring-accent/30 focus:border-accent'
-    }`
+  const currentStep = 1
 
   return (
-    <div className="min-h-screen bg-background pt-10 pb-12 px-6 flex flex-col justify-center items-center">
-      <div className="max-w-xl w-full">
-        {/* Progress & Exit Header */}
-        <motion.div
-          className="flex items-center justify-between mb-6"
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-        >
-          <button
-            onClick={() => onNavigate('home')}
-            className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground text-[12px] font-medium transition-colors"
-          >
-            <ArrowLeft size={14} />
+    <div className="assessment-bg">
+      <div className="assessment-container">
+        {/* Progress Header */}
+        <motion.div className="assessment-progress-header" variants={fadeUp} initial="hidden" animate="visible">
+          <button onClick={() => onNavigate('home')} className="assessment-exit-btn">
+            <ArrowLeft size={13} />
             Exit Assessment
           </button>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono font-bold text-accent">STEP 01 / 04</span>
-            <span className="text-[11px] text-muted-foreground">· Patient Vitals</span>
+
+          <div className="assessment-steps">
+            {STEPS.map((step, i) => (
+              <div
+                key={step.num}
+                className={`assessment-step ${i + 1 === currentStep ? 'active' : ''} ${i + 1 < currentStep ? 'completed' : ''}`}
+              >
+                <div className="assessment-step-dot">
+                  {i + 1 < currentStep ? <Check size={13} strokeWidth={3} /> : step.num}
+                </div>
+                <span className="assessment-step-label">{step.label}</span>
+              </div>
+            ))}
           </div>
         </motion.div>
 
-        {/* Card Container */}
+        {/* Step Title */}
         <motion.div
-          className="rounded-3xl border border-border bg-card p-6 md:p-8 shadow-sm"
+          className="assessment-step-title"
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45 }}
+          transition={{ duration: 0.45, delay: 0.1 }}
         >
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-1.5">
-              <div className="w-6 h-6 rounded-md bg-accent-subtle text-accent flex items-center justify-center">
-                <User size={13} />
-              </div>
-              <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
-                Patient Details & Vitals
-              </h1>
-            </div>
-            <p className="text-[12px] text-muted-foreground leading-relaxed">
-              Enter the patient's basic vitals to calibrate disease prediction priors and age-specific baseline risks.
-            </p>
+          <div className="assessment-step-badge">
+            <User size={10} />
+            STEP 01 / 04
           </div>
+          <h1 className="assessment-step-heading">Patient Details & Vitals</h1>
+          <p className="assessment-step-desc">
+            Enter the patient's basic vitals to calibrate disease prediction priors and age-specific baseline risks.
+          </p>
+        </motion.div>
 
-          <form onSubmit={handleContinue} className="flex flex-col gap-4">
-            {/* Full Name */}
-            <div>
-              <label className="text-[11px] font-semibold text-foreground mb-1 block">Full Name *</label>
-              <input
-                type="text"
-                placeholder="e.g. Alex Morgan"
-                value={form.name}
-                onChange={(e) => set('name', e.target.value)}
-                className={inputClass(!!errors.name)}
-              />
-              {errors.name && <p className="text-[11px] text-critical mt-1">{errors.name}</p>}
-            </div>
-
-            {/* Age & Gender Grid */}
-            <div className="grid grid-cols-2 gap-3.5">
-              <div>
-                <label className="text-[11px] font-semibold text-foreground mb-1 block">Age (Years) *</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="120"
-                  placeholder="e.g. 32"
-                  value={form.age}
-                  onChange={(e) => set('age', e.target.value)}
-                  className={inputClass(!!errors.age)}
-                />
-                {errors.age && <p className="text-[11px] text-critical mt-1">{errors.age}</p>}
+        {/* Form Card */}
+        <motion.div
+          className="assessment-card"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
+        >
+          <form onSubmit={handleContinue}>
+            {/* Section: Personal Information */}
+            <motion.div className="assessment-section" variants={staggerContainer} initial="hidden" animate="visible">
+              <div className="assessment-section-header">
+                <div className="assessment-section-icon assessment-section-icon--primary">
+                  <User size={14} />
+                </div>
+                <span className="assessment-section-title">Personal Information</span>
               </div>
 
-              <div>
-                <label className="text-[11px] font-semibold text-foreground mb-1 block">Biological Gender</label>
-                <select
-                  value={form.gender}
-                  onChange={(e) => set('gender', e.target.value)}
-                  className={inputClass()}
-                >
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other / Non-Binary</option>
-                </select>
-              </div>
-            </div>
-
-            {/* DOB & Blood Group Grid */}
-            <div className="grid grid-cols-2 gap-3.5">
-              <div>
-                <label className="text-[11px] font-semibold text-foreground mb-1 block">Date of Birth</label>
-                <input
-                  type="date"
-                  value={form.dob}
-                  onChange={(e) => set('dob', e.target.value)}
-                  className={inputClass()}
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-semibold text-foreground mb-1 block">Blood Group</label>
-                <select
-                  value={form.bloodGroup}
-                  onChange={(e) => set('bloodGroup', e.target.value)}
-                  className={inputClass()}
-                >
-                  {BLOOD_GROUPS.map((bg) => (
-                    <option key={bg} value={bg}>
-                      {bg}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Height & Weight Grid */}
-            <div className="grid grid-cols-2 gap-3.5">
-              <div>
-                <label className="text-[11px] font-semibold text-foreground mb-1 flex items-center gap-1">
-                  <Ruler size={12} className="text-muted-foreground" />
-                  Height (cm)
+              <motion.div variants={staggerItem} className="assessment-field">
+                <label className="assessment-label">
+                  Full Name <span className="assessment-label-required">*</span>
                 </label>
                 <input
-                  type="number"
-                  placeholder="e.g. 175"
-                  value={form.height}
-                  onChange={(e) => set('height', e.target.value)}
-                  className={inputClass()}
+                  type="text"
+                  placeholder="e.g. Alex Morgan"
+                  value={form.name}
+                  onChange={(e) => set('name', e.target.value)}
+                  className={`assessment-input ${errors.name ? 'assessment-input--error' : ''}`}
                 />
+                {errors.name && <p className="assessment-error">{errors.name}</p>}
+              </motion.div>
+
+              <div className="assessment-grid-2">
+                <motion.div variants={staggerItem} className="assessment-field">
+                  <label className="assessment-label">
+                    Age (Years) <span className="assessment-label-required">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="120"
+                    placeholder="e.g. 32"
+                    value={form.age}
+                    onChange={(e) => set('age', e.target.value)}
+                    className={`assessment-input ${errors.age ? 'assessment-input--error' : ''}`}
+                  />
+                  {errors.age && <p className="assessment-error">{errors.age}</p>}
+                </motion.div>
+
+                <motion.div variants={staggerItem} className="assessment-field">
+                  <label className="assessment-label">Biological Gender</label>
+                  <select
+                    value={form.gender}
+                    onChange={(e) => set('gender', e.target.value)}
+                    className="assessment-input"
+                  >
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other / Non-Binary</option>
+                  </select>
+                </motion.div>
               </div>
 
-              <div>
-                <label className="text-[11px] font-semibold text-foreground mb-1 flex items-center gap-1">
-                  <Scale size={12} className="text-muted-foreground" />
-                  Weight (kg)
-                </label>
-                <input
-                  type="number"
-                  placeholder="e.g. 70"
-                  value={form.weight}
-                  onChange={(e) => set('weight', e.target.value)}
-                  className={inputClass()}
-                />
-              </div>
-            </div>
+              <div className="assessment-grid-2">
+                <motion.div variants={staggerItem} className="assessment-field">
+                  <label className="assessment-label">
+                    <Calendar size={11} style={{ opacity: 0.5 }} />
+                    Date of Birth
+                  </label>
+                  <input
+                    type="date"
+                    value={form.dob}
+                    onChange={(e) => set('dob', e.target.value)}
+                    className="assessment-input"
+                  />
+                </motion.div>
 
-            {/* Action Buttons */}
-            <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => onNavigate('home')}
-                className="text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
+                <motion.div variants={staggerItem} className="assessment-field">
+                  <label className="assessment-label">
+                    <Droplets size={11} style={{ opacity: 0.5 }} />
+                    Blood Group
+                  </label>
+                  <select
+                    value={form.bloodGroup}
+                    onChange={(e) => set('bloodGroup', e.target.value)}
+                    className="assessment-input"
+                  >
+                    {BLOOD_GROUPS.map((bg) => (
+                      <option key={bg} value={bg}>
+                        {bg}
+                      </option>
+                    ))}
+                  </select>
+                </motion.div>
+              </div>
+            </motion.div>
+
+            {/* Section: Physical & Medical */}
+            <motion.div className="assessment-section" variants={staggerContainer} initial="hidden" animate="visible">
+              <div className="assessment-section-header">
+                <div className="assessment-section-icon assessment-section-icon--health">
+                  <Heart size={14} />
+                </div>
+                <span className="assessment-section-title">Physical & Medical</span>
+              </div>
+
+              <div className="assessment-grid-2">
+                <motion.div variants={staggerItem} className="assessment-field">
+                  <label className="assessment-label">
+                    <Ruler size={11} style={{ opacity: 0.5 }} />
+                    Height (cm)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 175"
+                    value={form.height}
+                    onChange={(e) => set('height', e.target.value)}
+                    className="assessment-input"
+                  />
+                </motion.div>
+
+                <motion.div variants={staggerItem} className="assessment-field">
+                  <label className="assessment-label">
+                    <Scale size={11} style={{ opacity: 0.5 }} />
+                    Weight (kg)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 70"
+                    value={form.weight}
+                    onChange={(e) => set('weight', e.target.value)}
+                    className="assessment-input"
+                  />
+                </motion.div>
+              </div>
+            </motion.div>
+
+            {/* Actions */}
+            <div className="assessment-actions">
+              <button type="button" onClick={() => onNavigate('home')} className="assessment-btn-cancel">
                 Cancel
               </button>
               <motion.button
                 type="submit"
-                className="inline-flex items-center gap-2 h-11 px-6 rounded-full bg-accent text-white font-semibold text-[13px] shadow-md shadow-accent/25"
+                className="assessment-btn-primary"
                 whileHover={buttonHover}
                 whileTap={buttonTap}
               >
