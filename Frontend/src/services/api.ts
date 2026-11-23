@@ -5,7 +5,7 @@
  * Communicates with the Flask REST backend at http://localhost:5000/api
  */
 
-import type { PatientDetails, PredictionResponse, HistoryItem, User } from '../types'
+import type { PatientDetails, PredictionResponse, HistoryItem, User, ClinicalReportItem } from '../types'
 
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE ||
@@ -287,6 +287,36 @@ export async function downloadPredictionPdf(predictionId: string): Promise<Blob>
   }
 
   return res.blob()
+}
+
+export async function getUserReports(): Promise<ClinicalReportItem[]> {
+  try {
+    const res = await request<{ reports: ClinicalReportItem[] }>('/user/reports', {
+      method: 'GET',
+    })
+    return res.reports || []
+  } catch {
+    // Resilient fallback for local mock / backward compatibility
+    const history = await getPredictionHistory()
+    return history.map((h) => ({
+      id: `rep-${h.id.slice(0, 8)}-cca`,
+      prediction_id: h.id,
+      title: `Clinical Assessment Dossier — ${(h.top_disease || 'Health Assessment').replace(/_/g, ' ')}`,
+      category: 'Complete Clinical Assessment',
+      category_code: 'clinical_assessment',
+      file_format: 'PDF (Vector Document)',
+      file_size: '42 KB',
+      status: 'Available',
+      created_at: h.created_at,
+      assessment_date: h.created_at,
+      patient_name: h.patient_name,
+      primary_condition: h.top_disease || 'General Assessment',
+      confidence: h.top_confidence,
+      risk_level: h.risk_level || 'low',
+      symptom_count: h.symptom_ids?.length || 0,
+      download_url: `/predictions/${h.id}/pdf`,
+    }))
+  }
 }
 
 // ── Metadata APIs ──────────────────────────────────────────────────────────────

@@ -257,6 +257,23 @@ def test_flask_api_endpoints():
         detail = res.get_json()
         assert detail["id"] == pred_id
         print(f"  GET /api/predictions/{pred_id} -> 200 OK (Full detail retrieved)")
+
+        # User Clinical Reports Endpoint (Authenticated)
+        res = client.get(
+            "/api/user/reports",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert res.status_code == 200
+        reports = res.get_json()["reports"]
+        assert len(reports) >= 1
+        assert reports[0]["prediction_id"] == pred_id
+        assert "download_url" in reports[0]
+        print(f"  GET /api/user/reports -> 200 OK ({len(reports)} clinical reports retrieved)")
+
+        # Unauthenticated Reports Endpoint Access
+        unauth_res = client.get("/api/user/reports")
+        assert unauth_res.status_code == 401
+        print("  GET /api/user/reports (Unauthenticated) -> 401 Unauthorized verified")
     finally:
         # Guarantee complete cleanup of user and all child predictions/results
         _cleanup_test_patient_artifacts(test_email)

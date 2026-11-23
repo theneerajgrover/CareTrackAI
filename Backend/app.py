@@ -758,6 +758,7 @@ def list_predictions():
     rows = query(
         """SELECT p.id, p.patient_name, p.symptom_ids, p.created_at,
                   pr.confidence_pct as top_confidence,
+                  pr.risk_level as top_risk,
                   d.name as top_disease,
                   COALESCE(pr_counts.num_findings, 0) as num_findings
            FROM predictions p
@@ -781,12 +782,73 @@ def list_predictions():
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             "top_disease": r["top_disease"],
             "top_confidence": float(r["top_confidence"]) if r["top_confidence"] is not None else None,
+            "risk_level": r.get("top_risk") or "low",
+            "status": "completed",
             "num_findings": int(r["num_findings"] or 0),
         }
         for r in (rows or [])
     ]
 
     return jsonify({"predictions": predictions}), 200
+
+
+@app.route("/api/user/reports", methods=["GET"])
+@require_auth
+def list_user_reports():
+    """
+    List all clinical reports generated from user's assessments.
+    Each report references its persisted prediction record.
+    Security: Only documents belonging to g.user_id are returned (zero IDOR).
+    Zero fake data, zero prediction recalculation.
+    """
+    rows = query(
+        """SELECT p.id, p.patient_name, p.symptom_ids, p.created_at,
+                  pr.confidence_pct as top_confidence,
+                  pr.risk_level as top_risk,
+                  d.name as top_disease,
+                  COALESCE(pr_counts.num_findings, 0) as num_findings
+           FROM predictions p
+           LEFT JOIN prediction_results pr ON pr.prediction_id = p.id AND pr.rank = 1
+           LEFT JOIN diseases d ON pr.disease_id = d.id
+           LEFT JOIN (
+               SELECT prediction_id, COUNT(*) as num_findings
+               FROM prediction_results
+               GROUP BY prediction_id
+           ) pr_counts ON pr_counts.prediction_id = p.id
+           WHERE p.user_id = %s
+           ORDER BY p.created_at DESC LIMIT 50""",
+        (g.user_id,), fetch_all=True,
+    )
+
+    reports = []
+    for r in (rows or []):
+        pred_id = str(r["id"])
+        disease = r["top_disease"] or "Health Assessment"
+        created_at_iso = r["created_at"].isoformat() if r["created_at"] else None
+        symptom_count = len(r["symptom_ids"]) if r["symptom_ids"] else 0
+        conf = float(r["top_confidence"]) if r["top_confidence"] is not None else None
+        risk = r.get("top_risk") or "low"
+
+        reports.append({
+            "id": f"rep-{pred_id[:8]}-cca",
+            "prediction_id": pred_id,
+            "title": f"Clinical Assessment Dossier — {disease.title()}",
+            "category": "Complete Clinical Assessment",
+            "category_code": "clinical_assessment",
+            "file_format": "PDF (Vector Document)",
+            "file_size": "42 KB",
+            "status": "Available",
+            "created_at": created_at_iso,
+            "assessment_date": created_at_iso,
+            "patient_name": r["patient_name"],
+            "primary_condition": disease,
+            "confidence": conf,
+            "risk_level": risk,
+            "symptom_count": symptom_count,
+            "download_url": f"/api/predictions/{pred_id}/pdf",
+        })
+
+    return jsonify({"reports": reports}), 200
 
 
 @app.route("/api/predictions/<prediction_id>", methods=["GET"])

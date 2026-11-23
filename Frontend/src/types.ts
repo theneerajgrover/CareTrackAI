@@ -157,6 +157,27 @@ export interface HistoryItem {
   top_disease: string | null
   top_confidence: number | null
   num_findings: number
+  risk_level?: string
+  status?: string
+}
+
+export interface ClinicalReportItem {
+  id: string
+  prediction_id: string
+  title: string
+  category: string
+  category_code: string
+  file_format: string
+  file_size: string
+  status: string
+  created_at: string
+  assessment_date: string
+  patient_name: string
+  primary_condition: string
+  confidence: number | null
+  risk_level: string
+  symptom_count: number
+  download_url: string
 }
 
 export interface User {
