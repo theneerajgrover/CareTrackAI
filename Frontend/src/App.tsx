@@ -463,6 +463,13 @@ export default function App() {
                 selectedSymptoms={selectedSymptoms}
                 onSelectCategory={handleSelectCategory}
                 onNavigate={navigate}
+                onRemoveSymptom={(key) => {
+                  setSelectedSymptoms((prev) => {
+                    const next = { ...prev }
+                    delete next[key]
+                    return next
+                  })
+                }}
               />
             )}
 
