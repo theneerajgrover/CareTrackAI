@@ -52,51 +52,57 @@ export default function SymptomSubcategoryPage({
 
   return (
     <div className="assessment-bg">
-      <div className="assessment-container assessment-container--wide">
-        {/* Topbar Navigation */}
-        <motion.div className="assessment-topbar" variants={fadeUp} initial="hidden" animate="visible">
-          <button type="button" onClick={onSelectMore} className="assessment-exit-btn">
-            <ArrowLeft size={14} />
+      {/* ── Stationary Slim Header Bar with Integrated Stepper ── */}
+      <header className="assessment-topbar">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onSelectMore}
+            className="assessment-exit-btn"
+            title="Return to all categories"
+          >
+            <ArrowLeft size={13} />
             <span>All Categories</span>
           </button>
 
-          <div className="flex items-center gap-3">
-            <span className="assessment-badge-triage">
-              <Activity size={12} className="text-accent animate-pulse" />
-              {category.label} Symptoms
-            </span>
-          </div>
-        </motion.div>
+          <span className="hidden sm:inline-flex assessment-badge-triage">
+            <Activity size={12} className="text-accent animate-pulse" />
+            {category.label}
+          </span>
+        </div>
 
-        {/* 4-Step Stepper Card */}
-        <motion.div
-          className="assessment-stepper-card"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.05 }}
-        >
-          <div className="assessment-steps">
-            {STEPS.map((step) => {
-              const isActive = step.num === currentStep
-              const isCompleted = step.num < currentStep
-              return (
-                <div
-                  key={step.num}
-                  className={`assessment-step ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''}`}
-                >
-                  <div className="assessment-step-dot">
-                    {isCompleted ? <Check size={14} strokeWidth={3} /> : step.num}
-                  </div>
-                  <div className="assessment-step-info">
-                    <span className="assessment-step-number">STEP 0{step.num}</span>
-                    <span className="assessment-step-title">{step.title}</span>
-                    <span className="assessment-step-desc">{step.desc}</span>
-                  </div>
+        {/* Integrated 4-Step Progress Indicator */}
+        <nav className="assessment-stepper" aria-label="Assessment progress">
+          {STEPS.map((step) => {
+            const isActive = step.num === currentStep
+            const isCompleted = step.num < currentStep
+            return (
+              <div
+                key={step.num}
+                className={`assessment-stepper-item ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''}`}
+              >
+                <div className="assessment-stepper-dot">
+                  {isCompleted ? <Check size={11} strokeWidth={3} /> : step.num}
                 </div>
-              )
-            })}
-          </div>
-        </motion.div>
+                <div className="assessment-stepper-meta">
+                  <span className="assessment-stepper-num">STEP 0{step.num}</span>
+                  <span className="assessment-stepper-text">{step.title}</span>
+                </div>
+                {step.num < 4 && <div className="assessment-stepper-line" />}
+              </div>
+            )
+          })}
+        </nav>
+
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-mono font-bold text-accent bg-accent/10 px-2.5 py-1 rounded-md hidden md:inline-flex items-center gap-1.5">
+            <Check size={12} />
+            <span>{selectedInCategory} in Category</span>
+          </span>
+        </div>
+      </header>
+
+      <main className="assessment-container assessment-container--wide">
 
         {/* 2-Column Split Desktop Layout */}
         <div className="assessment-grid-layout" style={{ gridTemplateColumns: 'minmax(0, 1.7fr) minmax(320px, 1fr)' }}>
@@ -293,7 +299,7 @@ export default function SymptomSubcategoryPage({
             </div>
           </div>
         </div>
-      </div>
+      </main>
 
       {/* Floating Bottom Sticky Action Bar on Mobile */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-border px-6 py-3.5 z-40 shadow-lg">

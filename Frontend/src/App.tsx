@@ -339,9 +339,11 @@ export default function App() {
   }
 
   const showNavbar = !NO_NAVBAR_PAGES.includes(page)
+  const isAssessmentPage = ['patient-details', 'symptom-categories', 'symptom-subcategory', 'review', 'analyzing'].includes(page)
+  const isViewportLocked = page === 'patient-chatbot' || isAssessmentPage
 
   return (
-    <div className={`${page === 'patient-chatbot' ? 'h-screen h-[100dvh] overflow-hidden' : 'min-h-screen'} bg-background text-foreground`}>
+    <div className={`${isViewportLocked ? 'h-screen h-[100dvh] overflow-hidden' : 'min-h-screen'} bg-background text-foreground`}>
       {showNavbar && (
         <Navbar
           currentPage={page}
@@ -383,6 +385,7 @@ export default function App() {
             initial="initial"
             animate="animate"
             exit="exit"
+            className={isAssessmentPage ? 'h-full flex flex-col min-h-0 overflow-hidden' : ''}
             style={{ willChange: 'opacity, transform, filter' }}
           >
             {page === 'home' && (

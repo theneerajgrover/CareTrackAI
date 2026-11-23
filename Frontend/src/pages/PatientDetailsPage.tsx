@@ -4,7 +4,7 @@ import {
   ArrowRight, ArrowLeft, User, Ruler, Scale, Droplets, Calendar,
   Heart, Check, ShieldCheck, Sparkles, AlertCircle, Info, Activity
 } from 'lucide-react'
-import { fadeUp, buttonHover, buttonTap } from '../motion/variants'
+import { buttonHover, buttonTap } from '../motion/variants'
 import type { PatientDetails, Page } from '../types'
 import '../styles/assessment.css'
 
@@ -100,224 +100,238 @@ export default function PatientDetailsPage({ details, onSave, onNavigate }: Pati
 
   return (
     <div className="assessment-bg">
-      <div className="assessment-container">
-        {/* Topbar Navigation */}
-        <motion.div className="assessment-topbar" variants={fadeUp} initial="hidden" animate="visible">
-          <button type="button" onClick={() => onNavigate('home')} className="assessment-exit-btn">
-            <ArrowLeft size={14} />
+      {/* ── Stationary Slim Header Bar with Integrated Stepper ── */}
+      <header className="assessment-topbar">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => onNavigate('home')}
+            className="assessment-exit-btn"
+            title="Exit assessment and return home"
+          >
+            <ArrowLeft size={13} />
             <span>Exit Assessment</span>
           </button>
 
-          <div className="flex items-center gap-3">
-            <span className="assessment-badge-triage">
-              <Activity size={12} className="text-accent animate-pulse" />
-              Clinical Diagnostic Triage
-            </span>
-          </div>
-        </motion.div>
+          <span className="hidden sm:inline-flex assessment-badge-triage">
+            <Activity size={12} className="text-accent animate-pulse" />
+            Clinical Diagnostic Triage
+          </span>
+        </div>
 
-        {/* 4-Step Stepper Card */}
-        <motion.div
-          className="assessment-stepper-card"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.05 }}
-        >
-          <div className="assessment-steps">
-            {STEPS.map((step) => {
-              const isActive = step.num === currentStep
-              const isCompleted = step.num < currentStep
-              return (
-                <div
-                  key={step.num}
-                  className={`assessment-step ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''}`}
-                >
-                  <div className="assessment-step-dot">
-                    {isCompleted ? <Check size={14} strokeWidth={3} /> : step.num}
-                  </div>
-                  <div className="assessment-step-info">
-                    <span className="assessment-step-number">STEP 0{step.num}</span>
-                    <span className="assessment-step-title">{step.title}</span>
-                    <span className="assessment-step-desc">{step.desc}</span>
-                  </div>
+        {/* Integrated 4-Step Progress Indicator */}
+        <nav className="assessment-stepper" aria-label="Assessment progress">
+          {STEPS.map((step) => {
+            const isActive = step.num === currentStep
+            const isCompleted = step.num < currentStep
+            return (
+              <div
+                key={step.num}
+                className={`assessment-stepper-item ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''}`}
+              >
+                <div className="assessment-stepper-dot">
+                  {isCompleted ? <Check size={11} strokeWidth={3} /> : step.num}
                 </div>
-              )
-            })}
-          </div>
-        </motion.div>
-
-        {/* 2-Column Split Desktop Grid */}
-        <div className="assessment-grid-layout">
-          {/* Main Assessment Form */}
-          <motion.div
-            className="assessment-main-card"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, delay: 0.1 }}
-          >
-            <div className="mb-6">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-accent-subtle text-accent text-[10.5px] font-mono font-bold uppercase tracking-wider mb-2">
-                <User size={12} />
-                STEP 01 / 04 · CLINICAL INTAKE
+                <div className="assessment-stepper-meta">
+                  <span className="assessment-stepper-num">STEP 0{step.num}</span>
+                  <span className="assessment-stepper-text">{step.title}</span>
+                </div>
+                {step.num < 4 && <div className="assessment-stepper-line" />}
               </div>
-              <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight m-0">
-                Patient Details & Physiological Vitals
-              </h1>
-              <p className="text-[13px] text-muted-foreground mt-1.5 mb-0 leading-relaxed">
-                Provide baseline patient demographics to calibrate Bayesian disease prevalence priors and age-adjusted clinical risk scores.
-              </p>
+            )
+          })}
+        </nav>
+
+        {/* Stage Status Tag */}
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-mono font-bold text-accent bg-accent/10 px-2.5 py-1 rounded-md hidden md:inline-flex items-center gap-1.5">
+            <ShieldCheck size={12} />
+            <span>Stage 01 / 04</span>
+          </span>
+        </div>
+      </header>
+
+      {/* ── Main Viewport-Contained Assessment Container ── */}
+      <main className="assessment-container">
+        <div className="assessment-grid-layout">
+          {/* ── LEFT COLUMN: Patient Details Form ── */}
+          <div className="assessment-main-card">
+            {/* Compact Form Header */}
+            <div className="assessment-card-header">
+              <div>
+                <div className="inline-flex items-center gap-1.5 text-accent text-[10px] font-mono font-bold uppercase tracking-wider mb-0.5">
+                  <User size={11} />
+                  <span>Section 1 · Baseline Calibration</span>
+                </div>
+                <h1 className="text-lg md:text-xl font-extrabold text-foreground tracking-tight m-0">
+                  Patient Details & Physiological Vitals
+                </h1>
+              </div>
+              <span className="text-[11px] text-muted-foreground font-medium hidden sm:inline-block">
+                * Required fields
+              </span>
             </div>
 
-            <form onSubmit={handleContinue}>
-              {/* Group 1: Personal Demographics */}
-              <div className="assessment-section-card">
-                <div className="assessment-section-header">
-                  <div className="assessment-section-icon assessment-section-icon--primary">
-                    <User size={16} />
-                  </div>
-                  <span className="assessment-section-title">Personal Demographics</span>
-                  <span className="assessment-section-subtitle">Epidemiological Baseline</span>
-                </div>
-
-                {/* Full Name */}
-                <div className="assessment-field">
-                  <label className="assessment-label">
-                    Full Name <span className="assessment-label-required">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Alex Morgan"
-                    value={form.name}
-                    onChange={(e) => set('name', e.target.value)}
-                    className={`assessment-input ${errors.name ? 'assessment-input--error' : ''}`}
-                  />
-                  {errors.name && <p className="assessment-error"><AlertCircle size={12} /> {errors.name}</p>}
-                </div>
-
-                {/* Age & Date of Birth */}
-                <div className="grid sm:grid-cols-2 gap-3.5 assessment-field">
-                  <div>
-                    <label className="assessment-label">
-                      Age (Years) <span className="assessment-label-required">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="120"
-                      placeholder="e.g. 32"
-                      value={form.age}
-                      onChange={(e) => set('age', e.target.value)}
-                      className={`assessment-input ${errors.age ? 'assessment-input--error' : ''}`}
-                    />
-                    {errors.age && <p className="assessment-error"><AlertCircle size={12} /> {errors.age}</p>}
+            <form onSubmit={handleContinue} className="assessment-form-body">
+              <div>
+                {/* Section A: Personal Information */}
+                <div className="assessment-section-group">
+                  <div className="assessment-section-label">
+                    <User size={13} className="text-accent" />
+                    <span>Personal Demographics</span>
+                    <span className="assessment-section-pill">Epidemiological Priors</span>
                   </div>
 
-                  <div>
-                    <label className="assessment-label">
-                      <Calendar size={13} className="text-muted-foreground" />
-                      Date of Birth <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={form.dob}
-                      onChange={(e) => set('dob', e.target.value)}
-                      className="assessment-input"
-                    />
+                  <div className="assessment-form-grid">
+                    {/* Full Name (Full width) */}
+                    <div className="assessment-field col-span-full">
+                      <label className="assessment-label">
+                        Full Name <span className="assessment-label-required">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Alex Morgan"
+                        value={form.name}
+                        onChange={(e) => set('name', e.target.value)}
+                        className={`assessment-input ${errors.name ? 'assessment-input--error' : ''}`}
+                      />
+                      {errors.name && (
+                        <p className="assessment-error">
+                          <AlertCircle size={11} /> {errors.name}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Age (Half width) */}
+                    <div className="assessment-field">
+                      <label className="assessment-label">
+                        Age (Years) <span className="assessment-label-required">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="120"
+                        placeholder="e.g. 32"
+                        value={form.age}
+                        onChange={(e) => set('age', e.target.value)}
+                        className={`assessment-input ${errors.age ? 'assessment-input--error' : ''}`}
+                      />
+                      {errors.age && (
+                        <p className="assessment-error">
+                          <AlertCircle size={11} /> {errors.age}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Date of Birth (Half width) */}
+                    <div className="assessment-field">
+                      <label className="assessment-label">
+                        <Calendar size={12} className="text-muted-foreground" />
+                        <span>Date of Birth</span>
+                        <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={form.dob}
+                        onChange={(e) => set('dob', e.target.value)}
+                        className="assessment-input"
+                      />
+                    </div>
+
+                    {/* Biological Gender (Full width segmented control) */}
+                    <div className="assessment-field col-span-full">
+                      <label className="assessment-label">
+                        Biological Gender <span className="text-[10px] text-muted-foreground font-normal">(Used for physiological risk curves)</span>
+                      </label>
+                      <div className="assessment-segmented-group">
+                        {[
+                          { value: 'male', label: 'Male' },
+                          { value: 'female', label: 'Female' },
+                          { value: 'other', label: 'Other / Non-Binary' },
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => set('gender', opt.value)}
+                            className={`assessment-segment-btn ${form.gender === opt.value ? 'active' : ''}`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Biological Gender Tactile Segmented Selector */}
-                <div className="assessment-field">
-                  <label className="assessment-label">
-                    Biological Gender <span className="text-[10px] text-muted-foreground font-normal">(Used for physiological risk curves)</span>
-                  </label>
-                  <div className="assessment-segmented-group">
-                    {[
-                      { value: 'male', label: 'Male' },
-                      { value: 'female', label: 'Female' },
-                      { value: 'other', label: 'Other / Non-Binary' },
-                    ].map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => set('gender', opt.value)}
-                        className={`assessment-segment-btn ${form.gender === opt.value ? 'active' : ''}`}
-                      >
-                        <span>{opt.label}</span>
-                      </button>
-                    ))}
+                {/* Section B: Physiological Vitals */}
+                <div className="assessment-section-group">
+                  <div className="assessment-section-label">
+                    <Heart size={13} className="text-emerald-600" />
+                    <span>Physiological Vitals</span>
+                    <span className="assessment-section-pill">Metabolic Calibration</span>
+                  </div>
+
+                  <div className="assessment-form-grid">
+                    {/* Height (Half width) */}
+                    <div className="assessment-field">
+                      <label className="assessment-label">
+                        <Ruler size={12} className="text-muted-foreground" />
+                        Height (cm)
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 175"
+                        value={form.height}
+                        onChange={(e) => set('height', e.target.value)}
+                        className="assessment-input"
+                      />
+                    </div>
+
+                    {/* Weight (Half width) */}
+                    <div className="assessment-field">
+                      <label className="assessment-label">
+                        <Scale size={12} className="text-muted-foreground" />
+                        Weight (kg)
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 70"
+                        value={form.weight}
+                        onChange={(e) => set('weight', e.target.value)}
+                        className="assessment-input"
+                      />
+                    </div>
+
+                    {/* Blood Group (Full width compact pill selector) */}
+                    <div className="assessment-field col-span-full">
+                      <label className="assessment-label">
+                        <Droplets size={12} className="text-rose-500" />
+                        <span>Blood Group</span>
+                        <span className="text-[10px] text-muted-foreground font-normal">(Clinical serology)</span>
+                      </label>
+                      <div className="assessment-pills-grid">
+                        {BLOOD_GROUPS.map((bg) => (
+                          <button
+                            key={bg}
+                            type="button"
+                            onClick={() => set('bloodGroup', bg)}
+                            className={`assessment-pill-btn ${form.bloodGroup === bg ? 'active' : ''}`}
+                          >
+                            {bg}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Group 2: Physiological Vitals & Blood Group */}
-              <div className="assessment-section-card">
-                <div className="assessment-section-header">
-                  <div className="assessment-section-icon assessment-section-icon--health">
-                    <Heart size={16} />
-                  </div>
-                  <span className="assessment-section-title">Physiological Vitals & Metrics</span>
-                  <span className="assessment-section-subtitle">Physiological Prior Tuning</span>
-                </div>
-
-                {/* Height & Weight */}
-                <div className="grid sm:grid-cols-2 gap-3.5 assessment-field">
-                  <div>
-                    <label className="assessment-label">
-                      <Ruler size={13} className="text-muted-foreground" />
-                      Height (cm)
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="e.g. 175"
-                      value={form.height}
-                      onChange={(e) => set('height', e.target.value)}
-                      className="assessment-input"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="assessment-label">
-                      <Scale size={13} className="text-muted-foreground" />
-                      Weight (kg)
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="e.g. 70"
-                      value={form.weight}
-                      onChange={(e) => set('weight', e.target.value)}
-                      className="assessment-input"
-                    />
-                  </div>
-                </div>
-
-                {/* Blood Group Tactile Matrix */}
-                <div className="assessment-field">
-                  <label className="assessment-label">
-                    <Droplets size={13} className="text-muted-foreground" />
-                    Blood Group
-                  </label>
-                  <div className="assessment-pills-grid">
-                    {BLOOD_GROUPS.map((bg) => (
-                      <button
-                        key={bg}
-                        type="button"
-                        onClick={() => set('bloodGroup', bg)}
-                        className={`assessment-pill-btn ${form.bloodGroup === bg ? 'active' : ''}`}
-                      >
-                        {bg}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions Footer */}
+              {/* ── DOCKED BOTTOM ACTIONS (Always in Viewport) ── */}
               <div className="assessment-actions">
                 <button
                   type="button"
                   onClick={() => onNavigate('home')}
-                  className="text-[12.5px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                  className="assessment-btn-cancel"
                 >
                   Cancel Assessment
                 </button>
@@ -333,43 +347,30 @@ export default function PatientDetailsPage({ details, onSave, onNavigate }: Pati
                 </motion.button>
               </div>
             </form>
-          </motion.div>
+          </div>
 
-          {/* Contextual Clinical Intelligence Sidebar */}
-          <motion.div
-            className="assessment-sidebar"
-            initial={{ opacity: 0, x: 16 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.45, delay: 0.2 }}
-          >
-            {/* Card 1: Why Vitals Matter */}
-            <div className="assessment-info-card assessment-info-card--primary">
-              <div className="assessment-info-title">
-                <Sparkles size={16} className="text-accent" />
-                <span>Why Baseline Vitals Matter</span>
-              </div>
-              <p className="assessment-info-desc">
-                Our Bayesian inference model calibrates 713 clinical disease priors against your age and biological demographics.
-                For example, pediatric conditions are filtered out for adults, and age-correlated cardiovascular risks are accurately stratified.
-              </p>
-            </div>
-
-            {/* Card 2: Live Physiological Telemetry (Real-Time BMI Gauge) */}
+          {/* ── RIGHT COLUMN: Supporting Information Panel ── */}
+          <aside className="assessment-sidebar">
+            {/* Real-Time Physiological Telemetry (Live BMI Gauge) */}
             <div className="assessment-info-card">
-              <div className="assessment-info-title">
-                <Activity size={16} className="text-success" />
-                <span>Real-Time Physiological Telemetry</span>
+              <div className="assessment-info-header">
+                <div className="assessment-info-icon assessment-info-icon--health">
+                  <Activity size={14} />
+                </div>
+                <div>
+                  <h3 className="assessment-info-title">Real-Time Physiological Telemetry</h3>
+                  <span className="assessment-info-sub">Computed live from height & weight</span>
+                </div>
               </div>
-              <p className="assessment-info-desc">
-                Physiological vitals help calibrate systemic risk factors such as metabolic, circulatory, and cardiac disease baselines.
-              </p>
 
               {bmiData ? (
                 <div className="assessment-telemetry-box">
                   <div className="assessment-telemetry-metric">
                     <div>
-                      <span className="text-[11px] font-mono text-muted-foreground uppercase block font-semibold">Body Mass Index</span>
-                      <span className="assessment-bmi-value">{bmiData.score} <span className="text-[12px] font-normal text-muted-foreground font-sans">kg/m²</span></span>
+                      <span className="text-[10px] font-mono text-muted-foreground uppercase font-semibold">Body Mass Index</span>
+                      <div className="assessment-bmi-value">
+                        {bmiData.score} <span className="text-[11px] font-normal text-muted-foreground font-sans">kg/m²</span>
+                      </div>
                     </div>
                     <span
                       className="assessment-bmi-badge"
@@ -379,51 +380,64 @@ export default function PatientDetailsPage({ details, onSave, onNavigate }: Pati
                       {bmiData.label}
                     </span>
                   </div>
-
-                  {/* Progress bar */}
                   <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden mt-1">
                     <div
                       className="h-full rounded-full transition-all duration-300"
                       style={{ width: `${bmiData.pct}%`, background: bmiData.color }}
                     />
                   </div>
-                  <span className="text-[10px] text-muted-foreground mt-2 block font-mono">
+                  <span className="text-[9.5px] text-muted-foreground mt-1.5 block font-mono">
                     Standard WHO adult BMI classification
                   </span>
                 </div>
               ) : (
-                <div className="p-3.5 rounded-xl border border-dashed border-border bg-slate-50/60 mt-3 text-center">
-                  <p className="text-[11.5px] text-muted-foreground font-medium m-0">
-                    Enter Height & Weight to compute live BMI telemetry and physiological risk calibration.
+                <div className="assessment-telemetry-empty">
+                  <Scale size={15} className="text-muted-foreground/60 mb-1 mx-auto" />
+                  <p className="text-[11px] text-muted-foreground m-0">
+                    Enter Height and Weight to calibrate real-time BMI & metabolic prior weights.
                   </p>
                 </div>
               )}
             </div>
 
-            {/* Card 3: Clinical Security & Privacy */}
-            <div className="assessment-info-card">
-              <div className="assessment-info-title">
-                <ShieldCheck size={16} className="text-accent" />
-                <span>Encrypted & Confidential</span>
+            {/* Why Baseline Vitals Matter */}
+            <div className="assessment-info-card assessment-info-card--primary">
+              <div className="assessment-info-header">
+                <div className="assessment-info-icon assessment-info-icon--primary">
+                  <Sparkles size={14} />
+                </div>
+                <div>
+                  <h3 className="assessment-info-title">Why Baseline Vitals Matter</h3>
+                  <span className="assessment-info-sub">Gaussian Naive Bayes Calibration</span>
+                </div>
               </div>
               <p className="assessment-info-desc">
-                Your medical assessment session is encrypted end-to-end. We do not sell your health data or share clinical identifiers with third parties.
+                CareTrackAI calibrates 713 disease priors against your demographics.
+                Age and physiological baselines adjust pre-test probabilities and filter out statistically improbable conditions.
               </p>
             </div>
 
-            {/* Card 4: Clinical Advisory */}
-            <div className="assessment-info-card" style={{ background: '#fffbeb', borderColor: '#fde68a' }}>
-              <div className="assessment-info-title" style={{ color: '#92400e' }}>
-                <Info size={16} className="text-amber-600" />
-                <span>Clinical Triage Scope</span>
+            {/* Clinical Security & Triage Dual Pill Block */}
+            <div className="assessment-safety-grid">
+              <div className="assessment-safety-pill">
+                <ShieldCheck size={13} className="text-accent flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-[11px] text-foreground block">Encrypted & Private</strong>
+                  <span className="text-[10px] text-muted-foreground block leading-tight">Zero-identifier session encryption</span>
+                </div>
               </div>
-              <p className="assessment-info-desc" style={{ color: '#78350f' }}>
-                CareTrack AI provides clinical triage assistance and health risk stratification. In case of acute medical emergencies, immediately contact local emergency medical services (911/112).
-              </p>
+
+              <div className="assessment-safety-pill assessment-safety-pill--warning">
+                <AlertCircle size={13} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-[11px] text-amber-900 block">Triage Scope</strong>
+                  <span className="text-[10px] text-amber-700 block leading-tight">Call 911/112 in acute emergencies</span>
+                </div>
+              </div>
             </div>
-          </motion.div>
+          </aside>
         </div>
-      </div>
+      </main>
     </div>
   )
 }

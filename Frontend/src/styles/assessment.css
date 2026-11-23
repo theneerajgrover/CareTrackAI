@@ -1,13 +1,20 @@
 /* ══════════════════════════════════════════════════════════════════════════════
    CareTrackAI — Premium Healthcare SaaS Assessment Design System
+   Viewport-Optimized No-Scroll Architecture
    ══════════════════════════════════════════════════════════════════════════════ */
 
-/* ── Multi-Layer Clinical Background ────────────────────────────────────────── */
+/* ── Multi-Layer Clinical Background & Viewport Lock ────────────────────────── */
 .assessment-bg {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background-color: var(--color-background);
   position: relative;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 .assessment-bg::before {
@@ -33,46 +40,34 @@
   z-index: 0;
 }
 
-/* ── Outer Shell & Layout Containers ────────────────────────────────────────── */
-.assessment-container {
-  position: relative;
-  z-index: 1;
-  max-width: 1200px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 32px 24px 64px;
-}
-
-.assessment-container--wide {
-  max-width: 1280px;
-}
-
-/* ── Top Navigation Bar ─────────────────────────────────────────────────────── */
+/* ── Unified Slim Header Bar (Stationary Top) ───────────────────────────────── */
 .assessment-topbar {
+  flex-shrink: 0;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
-  padding: 12px 18px;
-  background: rgba(255, 255, 255, 0.85);
+  gap: 14px;
+  padding: 0 20px;
+  background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(228, 228, 231, 0.8);
-  border-radius: 16px;
-  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.04);
+  border-bottom: 1px solid rgba(228, 228, 231, 0.85);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  position: relative;
+  z-index: 25;
 }
 
 .assessment-exit-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 7px 14px;
-  border-radius: 10px;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 9px;
   border: 1px solid var(--color-border);
   background: var(--color-card);
   color: var(--color-foreground);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.18s ease;
@@ -88,46 +83,148 @@
 .assessment-badge-triage {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
+  gap: 5px;
+  padding: 3px 10px;
   border-radius: 9999px;
   background: rgba(67, 56, 202, 0.08);
   border: 1px solid rgba(67, 56, 202, 0.15);
   color: var(--color-accent);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   font-family: var(--font-mono);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
 }
 
-/* ── Premium 4-Step Progress Banner ─────────────────────────────────────────── */
+/* ── Integrated Stepper Component ───────────────────────────────────────────── */
+.assessment-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.assessment-stepper-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+.assessment-stepper-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: 800;
+  flex-shrink: 0;
+  border: 1.5px solid var(--color-border);
+  background: var(--color-card);
+  color: var(--color-muted-foreground);
+  transition: all 0.2s ease;
+}
+
+.assessment-stepper-item.active .assessment-stepper-dot {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(67, 56, 202, 0.15);
+}
+
+.assessment-stepper-item.completed .assessment-stepper-dot {
+  border-color: var(--color-success);
+  background: var(--color-success);
+  color: #ffffff;
+}
+
+.assessment-stepper-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.assessment-stepper-num {
+  font-size: 8.5px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--color-muted-foreground);
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.assessment-stepper-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.assessment-stepper-item.active .assessment-stepper-text {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.assessment-stepper-item.completed .assessment-stepper-text {
+  color: var(--color-foreground);
+}
+
+.assessment-stepper-line {
+  width: 20px;
+  height: 2px;
+  background: rgba(226, 232, 240, 0.9);
+  border-radius: 9999px;
+  margin: 0 4px;
+}
+
+.assessment-stepper-item.completed .assessment-stepper-line {
+  background: var(--color-success);
+}
+
+@media (max-width: 900px) {
+  .assessment-stepper-meta {
+    display: none;
+  }
+  .assessment-stepper-line {
+    width: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .assessment-stepper-line {
+    width: 8px;
+    margin: 0 2px;
+  }
+}
+
+/* ── Legacy Stepper Card Support ────────────────────────────────────────────── */
 .assessment-stepper-card {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(228, 228, 231, 0.85);
-  border-radius: 20px;
-  padding: 16px 24px;
-  margin-bottom: 28px;
-  box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.03);
+  border-radius: 16px;
+  padding: 10px 18px;
+  margin-bottom: 14px;
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.03);
 }
 
 .assessment-steps {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: 8px;
   position: relative;
 }
 
 .assessment-step {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   position: relative;
-  padding: 8px 12px;
-  border-radius: 14px;
-  transition: all 0.25s ease;
+  padding: 5px 8px;
+  border-radius: 10px;
+  transition: all 0.2s ease;
 }
 
 .assessment-step.active {
@@ -136,26 +233,25 @@
 }
 
 .assessment-step-dot {
-  width: 34px;
-  height: 34px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12.5px;
+  font-size: 11px;
   font-weight: 800;
   flex-shrink: 0;
-  border: 2px solid var(--color-border);
+  border: 1.5px solid var(--color-border);
   background: var(--color-card);
   color: var(--color-muted-foreground);
-  transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .assessment-step.active .assessment-step-dot {
   border-color: var(--color-accent);
   background: var(--color-accent);
   color: white;
-  box-shadow: 0 0 0 4px rgba(67, 56, 202, 0.16), 0 2px 8px rgba(67, 56, 202, 0.3);
+  box-shadow: 0 0 0 3px rgba(67, 56, 202, 0.15);
 }
 
 .assessment-step.completed .assessment-step-dot {
@@ -171,37 +267,36 @@
 }
 
 .assessment-step-number {
-  font-size: 9.5px;
+  font-size: 8.5px;
   font-family: var(--font-mono);
   font-weight: 700;
   color: var(--color-muted-foreground);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  line-height: 1.1;
+  letter-spacing: 0.04em;
+  line-height: 1;
 }
 
 .assessment-step-title {
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--color-foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.3;
+  line-height: 1.25;
 }
 
 .assessment-step.active .assessment-step-title {
   color: var(--color-accent);
-  font-weight: 800;
 }
 
 .assessment-step-desc {
-  font-size: 10.5px;
+  font-size: 9.5px;
   color: var(--color-muted-foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.2;
+  line-height: 1.1;
 }
 
 @media (max-width: 900px) {
@@ -211,131 +306,162 @@
 }
 
 @media (max-width: 640px) {
-  .assessment-steps {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 6px;
-  }
-  .assessment-step {
-    padding: 4px;
-    justify-content: center;
-  }
   .assessment-step-info {
     display: none;
   }
-  .assessment-step-dot {
-    width: 30px;
-    height: 30px;
-    font-size: 11px;
+  .assessment-step {
+    padding: 3px;
+    justify-content: center;
   }
+}
+
+/* ── Content Shell & Layout Containers ──────────────────────────────────────── */
+.assessment-container {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 14px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  z-index: 1;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(67, 56, 202, 0.2) transparent;
+}
+
+.assessment-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.assessment-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.assessment-container::-webkit-scrollbar-thumb {
+  background: rgba(67, 56, 202, 0.2);
+  border-radius: 9999px;
+}
+
+.assessment-container--wide {
+  max-width: 1320px;
 }
 
 /* ── Split 2-Column Desktop Grid ────────────────────────────────────────────── */
 .assessment-grid-layout {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 1fr;
-  gap: 28px;
-  align-items: start;
+  gap: 16px;
+  align-items: stretch;
 }
 
 @media (min-width: 1024px) {
   .assessment-grid-layout {
-    grid-template-columns: 1.55fr 1fr;
+    grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr);
+    gap: 20px;
   }
 }
 
 /* ── Main Assessment Card ───────────────────────────────────────────────────── */
 .assessment-main-card {
   background: var(--color-card);
-  border: 1.5px solid rgba(228, 228, 231, 0.85);
-  border-radius: 24px;
-  padding: 32px;
-  box-shadow:
-    0 4px 20px -2px rgba(0, 0, 0, 0.05),
-    0 1px 3px 0 rgba(0, 0, 0, 0.02);
-}
-
-@media (min-width: 768px) {
-  .assessment-main-card {
-    padding: 36px 40px;
-  }
-}
-
-/* ── Form Section Sub-Cards ─────────────────────────────────────────────────── */
-.assessment-section-card {
-  background: rgba(248, 250, 252, 0.65);
-  border: 1px solid rgba(226, 232, 240, 0.9);
+  border: 1px solid rgba(228, 228, 231, 0.9);
   border-radius: 18px;
-  padding: 22px 24px;
-  margin-bottom: 22px;
-  transition: all 0.2s ease;
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow:
+    0 4px 16px -2px rgba(0, 0, 0, 0.04),
+    0 1px 2px 0 rgba(0, 0, 0, 0.02);
 }
 
-.assessment-section-card:hover {
+.assessment-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.assessment-form-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  justify-content: space-between;
+}
+
+/* ── Form Section Sub-Groups ────────────────────────────────────────────────── */
+.assessment-section-group {
+  background: rgba(248, 250, 252, 0.7);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 14px;
+  padding: 12px 16px 14px;
+  margin-bottom: 12px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.assessment-section-group:hover {
   border-color: rgba(67, 56, 202, 0.25);
   background: rgba(248, 250, 252, 0.95);
 }
 
-.assessment-section-header {
+.assessment-section-label {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 18px;
-  padding-bottom: 12px;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-foreground);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
   border-bottom: 1px solid rgba(226, 232, 240, 0.8);
 }
 
-.assessment-section-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-.assessment-section-icon--primary {
-  background: rgba(67, 56, 202, 0.1);
-  color: var(--color-accent);
-}
-
-.assessment-section-icon--health {
-  background: rgba(5, 150, 105, 0.1);
-  color: var(--color-success);
-}
-
-.assessment-section-title {
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--color-foreground);
-  letter-spacing: -0.01em;
-}
-
-.assessment-section-subtitle {
-  font-size: 11px;
-  color: var(--color-muted-foreground);
+.assessment-section-pill {
   margin-left: auto;
+  font-size: 9.5px;
   font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--color-muted-foreground);
+  text-transform: uppercase;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
-/* ── Refined Input Controls ─────────────────────────────────────────────────── */
+/* ── Form Grid & Inputs ─────────────────────────────────────────────────────── */
+.assessment-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+
 .assessment-field {
-  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
 }
 
-.assessment-field:last-child {
-  margin-bottom: 0;
+.assessment-field.col-span-full {
+  grid-column: 1 / -1;
 }
 
 .assessment-label {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 12px;
+  gap: 4px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--color-foreground);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   letter-spacing: -0.005em;
 }
 
@@ -344,29 +470,23 @@
   font-weight: 800;
 }
 
-.assessment-input-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
 .assessment-input {
   width: 100%;
-  height: 46px;
-  padding: 0 16px;
-  border-radius: 12px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 9px;
   border: 1.5px solid var(--color-border);
   background: #FFFFFF;
   color: var(--color-foreground);
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-family: var(--font-sans);
   outline: none;
-  transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: all 0.18s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .assessment-input::placeholder {
   color: #94a3b8;
-  font-size: 12.5px;
+  font-size: 11.5px;
 }
 
 .assessment-input:hover {
@@ -375,7 +495,7 @@
 
 .assessment-input:focus {
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 4px rgba(67, 56, 202, 0.12);
+  box-shadow: 0 0 0 3px rgba(67, 56, 202, 0.12);
   background: #FFFFFF;
 }
 
@@ -384,41 +504,41 @@
 }
 
 .assessment-input--error:focus {
-  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.12);
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
 }
 
 .assessment-error {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   color: var(--color-critical);
-  margin-top: 5px;
+  margin-top: 3px;
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-/* ── Segmented Button Groups (Tactile Gender Selector) ──────────────────────── */
+/* ── Biological Gender Tactile Selector ─────────────────────────────────────── */
 .assessment-segmented-group {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 6px;
 }
 
 .assessment-segment-btn {
-  height: 44px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 0 12px;
-  border-radius: 12px;
+  gap: 5px;
+  padding: 0 10px;
+  border-radius: 8px;
   border: 1.5px solid var(--color-border);
   background: #FFFFFF;
   color: var(--color-foreground);
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: all 0.15s ease;
   outline: none;
 }
 
@@ -429,28 +549,28 @@
 
 .assessment-segment-btn.active {
   border-color: var(--color-accent);
-  background: rgba(67, 56, 202, 0.07);
+  background: rgba(67, 56, 202, 0.08);
   color: var(--color-accent);
   font-weight: 700;
-  box-shadow: 0 1px 4px rgba(67, 56, 202, 0.12);
+  box-shadow: 0 1px 3px rgba(67, 56, 202, 0.12);
 }
 
 /* ── Blood Group Tactile Pills ──────────────────────────────────────────────── */
 .assessment-pills-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
 }
 
 .assessment-pill-btn {
-  height: 36px;
-  min-width: 44px;
-  padding: 0 10px;
-  border-radius: 10px;
-  border: 1.5px solid var(--color-border);
+  height: 30px;
+  min-width: 38px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
   background: #FFFFFF;
   color: var(--color-foreground);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   font-family: var(--font-mono);
   cursor: pointer;
@@ -470,111 +590,53 @@
   box-shadow: 0 2px 6px rgba(67, 56, 202, 0.25);
 }
 
-/* ── Contextual Clinical Intelligence Sidebar ───────────────────────────────── */
-.assessment-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.assessment-info-card {
-  background: var(--color-card);
-  border: 1px solid rgba(228, 228, 231, 0.85);
-  border-radius: 20px;
-  padding: 24px;
-  box-shadow: 0 2px 12px -2px rgba(0, 0, 0, 0.04);
-}
-
-.assessment-info-card--primary {
-  background: linear-gradient(135deg, rgba(67, 56, 202, 0.04) 0%, rgba(99, 102, 241, 0.02) 100%);
-  border-color: rgba(67, 56, 202, 0.2);
-}
-
-.assessment-info-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13.5px;
-  font-weight: 800;
-  color: var(--color-foreground);
-  margin-bottom: 8px;
-  letter-spacing: -0.01em;
-}
-
-.assessment-info-desc {
-  font-size: 12px;
-  color: var(--color-muted-foreground);
-  line-height: 1.55;
-  margin: 0;
-}
-
-/* ── Live Physiological Telemetry Card (Real-Time BMI Gauge) ────────────────── */
-.assessment-telemetry-box {
-  background: #FFFFFF;
-  border: 1.5px solid rgba(228, 228, 231, 0.9);
-  border-radius: 16px;
-  padding: 16px;
-  margin-top: 12px;
-}
-
-.assessment-telemetry-metric {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.assessment-bmi-value {
-  font-size: 26px;
-  font-weight: 900;
-  font-family: var(--font-mono);
-  color: var(--color-foreground);
-  letter-spacing: -0.02em;
-}
-
-.assessment-bmi-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
-  border-radius: 9999px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-/* ── Primary Action Buttons ─────────────────────────────────────────────────── */
+/* ── Docked Bottom Action Controls ─────────────────────────────────────────── */
 .assessment-actions {
-  margin-top: 28px;
-  padding-top: 22px;
-  border-top: 1px solid var(--color-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
+  padding-top: 10px;
+  margin-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.assessment-btn-cancel {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  padding: 6px 0;
+}
+
+.assessment-btn-cancel:hover {
+  color: var(--color-foreground);
 }
 
 .assessment-btn-primary {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 48px;
-  padding: 0 28px;
-  border-radius: 14px;
+  gap: 7px;
+  height: 40px;
+  padding: 0 22px;
+  border-radius: 10px;
   border: none;
   background: var(--color-accent);
   color: white;
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 4px 16px -2px rgba(67, 56, 202, 0.35), 0 2px 6px rgba(67, 56, 202, 0.15);
-  transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: 0 3px 12px -2px rgba(67, 56, 202, 0.35);
+  transition: all 0.18s cubic-bezier(0.22, 1, 0.36, 1);
   outline: none;
 }
 
 .assessment-btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px -4px rgba(67, 56, 202, 0.45), 0 3px 8px rgba(67, 56, 202, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px -3px rgba(67, 56, 202, 0.45);
 }
 
 .assessment-btn-primary:active {
@@ -588,12 +650,208 @@
   box-shadow: none;
 }
 
+/* ── Contextual Clinical Intelligence Sidebar ───────────────────────────────── */
+.assessment-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.assessment-info-card {
+  background: var(--color-card);
+  border: 1px solid rgba(228, 228, 231, 0.85);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+
+.assessment-info-card--primary {
+  background: linear-gradient(135deg, rgba(67, 56, 202, 0.04) 0%, rgba(99, 102, 241, 0.02) 100%);
+  border-color: rgba(67, 56, 202, 0.2);
+}
+
+.assessment-info-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.assessment-info-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.assessment-info-icon--primary {
+  background: rgba(67, 56, 202, 0.1);
+  color: var(--color-accent);
+}
+
+.assessment-info-icon--health {
+  background: rgba(5, 150, 105, 0.1);
+  color: var(--color-success);
+}
+
+.assessment-info-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--color-foreground);
+  margin: 0;
+}
+
+.assessment-info-sub {
+  font-size: 9.5px;
+  color: var(--color-muted-foreground);
+  display: block;
+  font-family: var(--font-mono);
+}
+
+.assessment-info-desc {
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ── Real-Time Physiological Telemetry (Live BMI Gauge) ─────────────────────── */
+.assessment-telemetry-box {
+  background: #FFFFFF;
+  border: 1px solid rgba(228, 228, 231, 0.9);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 6px;
+}
+
+.assessment-telemetry-metric {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.assessment-bmi-value {
+  font-size: 22px;
+  font-weight: 900;
+  font-family: var(--font-mono);
+  color: var(--color-foreground);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  display: inline-block;
+}
+
+.assessment-bmi-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.assessment-telemetry-empty {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px dashed rgba(203, 213, 225, 0.9);
+  background: rgba(248, 250, 252, 0.6);
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* ── Security & Safety Dual Block ───────────────────────────────────────────── */
+.assessment-safety-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.assessment-safety-pill {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: rgba(248, 250, 252, 0.9);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.assessment-safety-pill--warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+/* ── Backward-Compatible Legacy Section Sub-Cards (Used in ReviewPage etc.) ──── */
+.assessment-section-card {
+  background: rgba(248, 250, 252, 0.65);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 14px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  transition: all 0.2s ease;
+}
+
+.assessment-section-card:hover {
+  border-color: rgba(67, 56, 202, 0.25);
+  background: rgba(248, 250, 252, 0.95);
+}
+
+.assessment-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.assessment-section-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.assessment-section-icon--primary {
+  background: rgba(67, 56, 202, 0.1);
+  color: var(--color-accent);
+}
+
+.assessment-section-icon--health {
+  background: rgba(5, 150, 105, 0.1);
+  color: var(--color-success);
+}
+
+.assessment-section-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--color-foreground);
+  letter-spacing: -0.01em;
+}
+
+.assessment-section-subtitle {
+  font-size: 10px;
+  color: var(--color-muted-foreground);
+  margin-left: auto;
+  font-family: var(--font-mono);
+}
+
 /* ── Reduced Motion ─────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .assessment-btn-primary,
   .assessment-segment-btn,
   .assessment-pill-btn,
   .assessment-step-dot,
+  .assessment-stepper-dot,
   .assessment-input {
     transition: none !important;
     transform: none !important;
