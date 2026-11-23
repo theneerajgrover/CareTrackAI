@@ -32,8 +32,9 @@ from dotenv import load_dotenv
 
 from predict import predict_disease, get_model_info, get_available_symptoms, _load_model
 from database import query, execute, execute_returning, execute_transaction, execute_values
-from gemini_service import generate_remedies_and_warnings, classify_risk, _get_client
+from gemini_service import generate_remedies_and_warnings, classify_risk, get_doctor_specialty, _get_client
 from symptom_mapper import FRONTEND_TO_DATASET
+from pdf_service import generate_medical_report_pdf
 
 load_dotenv()
 
@@ -851,6 +852,135 @@ def get_prediction(prediction_id):
             for r in results
         ],
     }), 200
+
+
+@app.route("/api/predictions/<prediction_id>/pdf", methods=["GET"])
+def get_prediction_pdf(prediction_id):
+    """
+    Generate and download a professional, vector-based A4 PDF medical report
+    with authorization enforcement (owner patient, admin role, or valid guest ID).
+    """
+    token = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header.split(" ", 1)[1]
+    elif request.args.get("token"):
+        token = request.args.get("token")
+
+    is_admin = False
+    user_id = None
+
+    if token:
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+            token_type = payload.get("type")
+            if token_type == "admin_access":
+                is_admin = True
+            elif token_type == "access":
+                user_id = payload.get("sub")
+            else:
+                return jsonify({"error": "Invalid token type"}), 401
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token has expired"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Invalid token"}), 401
+
+    pred = None
+    if is_admin:
+        pred = query("SELECT * FROM predictions WHERE id = %s", (prediction_id,), fetch_one=True)
+    elif user_id:
+        pred = query(
+            "SELECT * FROM predictions WHERE id = %s AND user_id = %s",
+            (prediction_id, user_id),
+            fetch_one=True,
+        )
+        if not pred:
+            exists = query("SELECT id FROM predictions WHERE id = %s", (prediction_id,), fetch_one=True)
+            if exists:
+                return jsonify({"error": "Unauthorized to access this report"}), 403
+    else:
+        guest_id = request.headers.get("X-Guest-ID") or request.args.get("guest_id")
+        if guest_id:
+            usage = query(
+                """SELECT id FROM guest_usage WHERE guest_id = %s AND prediction_id = %s""",
+                (guest_id, prediction_id),
+                fetch_one=True,
+            )
+            if usage:
+                pred = query(
+                    "SELECT * FROM predictions WHERE id = %s AND user_id IS NULL",
+                    (prediction_id,),
+                    fetch_one=True,
+                )
+            else:
+                exists = query("SELECT id FROM predictions WHERE id = %s", (prediction_id,), fetch_one=True)
+                if exists:
+                    return jsonify({"error": "Unauthorized guest access"}), 403
+        else:
+            return jsonify({"error": "Authentication required to download medical report"}), 401
+
+    if not pred:
+        return jsonify({"error": "Prediction not found"}), 404
+
+    results = query(
+        """SELECT pr.*, d.name as disease_name
+           FROM prediction_results pr LEFT JOIN diseases d ON pr.disease_id = d.id
+           WHERE pr.prediction_id = %s ORDER BY pr.rank""",
+        (prediction_id,), fetch_all=True,
+    )
+
+    symptom_names = []
+    if pred["symptom_ids"]:
+        missing_ids = [sid for sid in pred["symptom_ids"] if not any(s.get("id") == sid for s in _SYMPTOM_MAP_CACHE.values())]
+        if missing_ids:
+            fetched = query("SELECT id, key, label FROM symptoms WHERE id = ANY(%s)", (missing_ids,), fetch_all=True)
+            if fetched:
+                for f in fetched:
+                    _SYMPTOM_MAP_CACHE[f["key"]] = f
+
+        cache_by_id = {s["id"]: s for s in _SYMPTOM_MAP_CACHE.values() if "id" in s}
+        for sid in pred["symptom_ids"]:
+            s = cache_by_id.get(sid)
+            if s:
+                symptom_names.append({"id": sid, "key": s["key"], "label": s.get("label", s["key"])})
+
+    report_data = {
+        "id": str(pred["id"]),
+        "created_at": pred["created_at"].isoformat() if pred["created_at"] else None,
+        "patient": {
+            "name": pred["patient_name"],
+            "age": pred["patient_age"],
+            "gender": pred["patient_gender"],
+            "dob": pred["patient_dob"],
+            "blood_group": pred.get("patient_blood_group", ""),
+            "height": pred.get("patient_height", ""),
+            "weight": pred.get("patient_weight", ""),
+        },
+        "symptoms": symptom_names,
+        "results": [
+            {
+                "rank": r["rank"],
+                "disease": r["disease_name"],
+                "confidence": float(r["confidence_pct"]),
+                "risk_level": r["risk_level"],
+                "remedies": r["remedies_text"],
+                "warning": r["warning_text"],
+                "doctor": get_doctor_specialty(r["disease_name"] or ""),
+            }
+            for r in results
+        ],
+    }
+
+    try:
+        pdf_bytes = generate_medical_report_pdf(report_data)
+    except Exception as e:
+        return jsonify({"error": f"Failed to generate PDF report: {str(e)}"}), 500
+
+    response = Response(pdf_bytes, mimetype="application/pdf")
+    response.headers["Content-Disposition"] = f'attachment; filename="CareTrack_Report_{str(pred["id"])[:8]}.pdf"'
+    response.headers["Content-Type"] = "application/pdf"
+    response.headers["Cache-Control"] = "private, no-cache, no-store, must-revalidate"
+    return response
 
 
 # -- Patient Portal Specific Endpoints ------------------------------------------

@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Activity, Shield, AlertTriangle, AlertCircle, RotateCcw,
   Sparkles, ArrowLeft, User, HeartPulse, Stethoscope,
-  CheckCircle2, ChevronDown, ChevronUp, Clock, FileText, Printer, Check
+  CheckCircle2, ChevronDown, ChevronUp, Clock, FileText, Printer, Check, Download, RefreshCw
 } from 'lucide-react'
 import { fadeUp, staggerContainer, staggerItem, buttonHover, buttonTap } from '../motion/variants'
+import { downloadPredictionPdf } from '../services/api'
 import type { PatientDetails, SelectedSymptom, Page, PredictionResponse } from '../types'
 
 interface ReportPageProps {
@@ -26,9 +27,38 @@ export default function ReportPage({
   onStartNew,
 }: ReportPageProps) {
   const [expandedIndex, setExpandedIndex] = useState<number>(0)
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
 
   const predictions = predictionData?.predictions || []
   const symptomsList = Object.values(selectedSymptoms)
+
+  async function handleDownloadPdf() {
+    if (isDownloading) return
+    const predictionId = predictionData?.prediction_id
+    if (!predictionId) {
+      setDownloadError('Assessment reference not found. Please try re-running the assessment.')
+      return
+    }
+    setIsDownloading(true)
+    setDownloadError(null)
+    try {
+      const blob = await downloadPredictionPdf(predictionId)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `CareTrack_Report_${predictionId.slice(0, 8)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000)
+    } catch (err: any) {
+      console.error('[PDF_DOWNLOAD_ERROR]', err)
+      setDownloadError(err.message || 'Failed to download medical report PDF.')
+    } finally {
+      setIsDownloading(false)
+    }
+  }
 
   const timestamp = new Date().toLocaleString('en-US', {
     day: 'numeric',
@@ -93,27 +123,62 @@ export default function ReportPage({
             {returnPage === 'history' ? 'Back to History' : 'Back to Home'}
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
+            <motion.button
+              onClick={handleDownloadPdf}
+              disabled={isDownloading}
+              className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[12px] shadow-md shadow-indigo-600/30 transition-colors disabled:opacity-60 cursor-pointer"
+              whileHover={!isDownloading ? buttonHover : {}}
+              whileTap={!isDownloading ? buttonTap : {}}
+            >
+              {isDownloading ? (
+                <>
+                  <RefreshCw size={13} className="animate-spin" />
+                  Generating PDF...
+                </>
+              ) : (
+                <>
+                  <Download size={14} />
+                  Download Medical Report (PDF)
+                </>
+              )}
+            </motion.button>
+
             <motion.button
               onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 h-10 px-5 rounded-full border border-slate-300 bg-white text-slate-800 font-bold text-[12px] hover:bg-slate-50 transition-colors shadow-sm"
+              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full border border-slate-300 bg-white text-slate-800 font-bold text-[12px] hover:bg-slate-50 transition-colors shadow-sm"
               whileTap={buttonTap}
             >
-              <Printer size={14} className="text-indigo-600" />
-              Print / Save PDF
+              <Printer size={14} className="text-slate-600" />
+              Print View
             </motion.button>
 
             <motion.button
               onClick={onStartNew}
-              className="inline-flex items-center gap-1.5 h-10 px-5 rounded-full bg-indigo-600 text-white font-bold text-[12px] shadow-md shadow-indigo-600/30 hover:bg-indigo-700 transition-colors"
+              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full border border-slate-300 bg-white text-slate-800 font-bold text-[12px] hover:bg-slate-50 transition-colors shadow-sm"
               whileHover={buttonHover}
               whileTap={buttonTap}
             >
               <RotateCcw size={13} />
-              Start New Check
+              New Check
             </motion.button>
           </div>
         </motion.div>
+
+        {downloadError && (
+          <div className="print:hidden mb-4 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[12px] font-semibold flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={15} className="text-red-600 flex-shrink-0" />
+              <span>{downloadError}</span>
+            </div>
+            <button
+              onClick={() => setDownloadError(null)}
+              className="text-red-500 hover:text-red-700 font-bold text-[11px]"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* ── Main Printable Medical Report Document ── */}
         <motion.div
@@ -125,15 +190,18 @@ export default function ReportPage({
           {/* 1. Medical Document Header */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b-2 border-slate-200">
             <div className="flex items-center gap-3.5">
-              {/* Brand Heart-Pulse Icon */}
-              <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-teal-500 via-indigo-600 to-indigo-700 flex items-center justify-center text-white shadow-md shadow-indigo-500/25 p-2.5">
-                <HeartPulse size={28} strokeWidth={2.5} />
+              {/* Brand Activity Pulse Icon */}
+              <div
+                className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-md shadow-indigo-600/25 p-2.5 flex-shrink-0"
+                style={{ background: 'linear-gradient(135deg, #4338CA, #6366F1)' }}
+              >
+                <Activity size={24} strokeWidth={2.5} />
               </div>
               <div>
                 <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-950">
-                  CareTrack
+                  CareTrack <span className="text-indigo-600">AI</span>
                 </h1>
-                <p className="text-[13px] font-bold text-indigo-700 tracking-wider uppercase font-mono mt-0.5">
+                <p className="text-[12px] font-bold text-indigo-700 tracking-wider uppercase font-mono mt-0.5">
                   Medical Health Report
                 </p>
               </div>
@@ -332,7 +400,17 @@ export default function ReportPage({
           {/* 6. Confidential Medical Footer */}
           <div className="mt-12 pt-6 border-t-2 border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left text-[11.5px] font-mono text-slate-600">
             <div>
-              <p className="font-extrabold text-slate-950">© 2026 CARETRACK AI | Confidential Medical Report</p>
+              <p className="font-extrabold text-slate-950">© CareTrackAI · Confidential Medical Report</p>
+              <p className="text-[11px] text-indigo-700 font-semibold mt-0.5">
+                <a
+                  href="https://theneerajgrover.github.io/CareTrackAI/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:underline"
+                >
+                  https://theneerajgrover.github.io/CareTrackAI/
+                </a>
+              </p>
               <p className="text-[10.5px] text-slate-500 mt-0.5">This report is generated for health triage assistance and should be verified with a certified clinician.</p>
             </div>
             <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-800 font-bold border border-slate-300">
@@ -345,7 +423,7 @@ export default function ReportPage({
         <div className="print:hidden mt-6 flex flex-col sm:flex-row items-center justify-center gap-3.5">
           <motion.button
             onClick={onStartNew}
-            className="w-full sm:w-auto h-11 px-8 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[13px] shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2"
+            className="w-full sm:w-auto h-11 px-8 rounded-full border-2 border-slate-300 bg-white text-slate-900 font-bold text-[13px] hover:bg-slate-100 transition-colors flex items-center justify-center gap-2 shadow-sm"
             whileHover={buttonHover}
             whileTap={buttonTap}
           >
@@ -353,12 +431,23 @@ export default function ReportPage({
             Start New Health Check
           </motion.button>
           <motion.button
-            onClick={() => window.print()}
-            className="w-full sm:w-auto h-11 px-8 rounded-full border-2 border-slate-300 bg-white text-slate-900 font-bold text-[13px] hover:bg-slate-100 transition-colors flex items-center justify-center gap-2 shadow-sm"
-            whileTap={buttonTap}
+            onClick={handleDownloadPdf}
+            disabled={isDownloading}
+            className="w-full sm:w-auto h-11 px-8 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[13px] shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
+            whileHover={!isDownloading ? buttonHover : {}}
+            whileTap={!isDownloading ? buttonTap : {}}
           >
-            <Printer size={15} className="text-indigo-600" />
-            Export / Print Full Report
+            {isDownloading ? (
+              <>
+                <RefreshCw size={15} className="animate-spin" />
+                Generating PDF...
+              </>
+            ) : (
+              <>
+                <Download size={15} />
+                Download Medical Report (PDF)
+              </>
+            )}
           </motion.button>
         </div>
       </div>

@@ -845,6 +845,15 @@ def get_report(report_id):
     return get_analysis(report_id)
 
 
+@admin_bp.route("/reports/<report_id>/pdf", methods=["GET"])
+@require_admin
+def get_report_pdf(report_id):
+    """Download report PDF as admin."""
+    log_audit("export_report_pdf", "prediction", report_id)
+    from app import get_prediction_pdf
+    return get_prediction_pdf(report_id)
+
+
 # ── Symptom Endpoints ────────────────────────────────────────────────────────
 
 @admin_bp.route("/symptoms", methods=["GET"])

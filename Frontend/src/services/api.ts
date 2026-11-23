@@ -267,6 +267,28 @@ export async function getPredictionDetails(id: string): Promise<any> {
   })
 }
 
+export async function downloadPredictionPdf(predictionId: string): Promise<Blob> {
+  const token = getAccessToken()
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  } else {
+    headers['X-Guest-ID'] = getGuestId()
+  }
+
+  const res = await fetch(`${API_BASE}/predictions/${encodeURIComponent(predictionId)}/pdf`, {
+    method: 'GET',
+    headers,
+  })
+
+  if (!res.ok) {
+    const errorJson = await res.json().catch(() => ({}))
+    throw new Error(errorJson.error || `Failed to download report PDF (HTTP ${res.status})`)
+  }
+
+  return res.blob()
+}
+
 // ── Metadata APIs ──────────────────────────────────────────────────────────────
 
 let _symptomsCache: { id: number; key: string; label: string; category: string }[] | null = null
